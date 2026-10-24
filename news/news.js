@@ -1,12 +1,17 @@
 // MK News, the Newsreel: Mohamed's AI news as its own world, the sibling of MK Cinema. A billboard for the top
-// story lights the page (ambient.js), topic rows slide sideways (rows.js), Discover holds the whole feed with the
-// charts and repo lists, and Saved keeps what was sent to Claude. Data comes only from /api/news/*.
+// story lights the page (ambient.js), topic rows slide sideways (rows.js), Topics holds the whole feed with the
+// charts and repo lists, Reels plays the stories and real clips full screen, and Settings holds his choices and
+// Saved (what was sent to Claude). Reels and Settings are the launcher's own modules (../reels.js, ../settings.js):
+// one code path and the same shared choices on every device. Every story shows a real picture where one exists.
 import { icon } from "./icons.js";
 import { createAmbient } from "./ambient.js";
 import { mountRows, page, syncInk } from "./rows.js";
 import * as C from "../charts.js";
 import * as source from "../source.js";
-import { setMyWork, TOPICS, TOPIC, KIND_LABEL, PROVIDER, CARD_HOSTS, toMs, ago, hoursAgo, byNewest, compact, money, cleanModel, plural, lowerFirst, minutes, prettyRepo, releaseChanges, releaseHighlight, releaseTitle, incidentOpen, firstSentence, cleanSummary, sourceLabel, artName, artUrl, artCss, pictureOf, view, metaExtra, promptFor, claudeUrl, priceDrops, flagshipPrices } from "./story.js";
+import { GLYPHS } from "../glyphs.js";
+import { createReels } from "../reels.js";
+import { createSettings } from "../settings.js";
+import { thumbOf, setMyWork, TOPICS, TOPIC, KIND_LABEL, PROVIDER, CARD_HOSTS, toMs, ago, hoursAgo, byNewest, compact, money, cleanModel, plural, lowerFirst, minutes, prettyRepo, releaseChanges, releaseHighlight, releaseTitle, incidentOpen, firstSentence, cleanSummary, sourceLabel, artName, artUrl, artCss, pictureOf, view, metaExtra, promptFor, claudeUrl, priceDrops, flagshipPrices } from "./story.js";
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -14,6 +19,10 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 // Story links come from the feed (or this device's cached copy of it): only ever web addresses.
 const safeUrl = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "#");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
+const ROUTES = ["home", "reels", "discover", "settings", "saved"];
+// The phone tab bar and the desktop tabs: Saved lives in Settings now, one tap away.
+const TABS = [["home", "Home", "#/home", "home"], ["reels", "Reels", "#/reels", "reels"], ["discover", "Topics", "#/discover", "topics"],
+  ["settings", "Settings", "#/settings", "settings"]];
 
 const REPO_LISTS = [["today", "Today"], ["week", "This week"], ["rising", "New & rising"], ["mcp", "MCP"], ["claude-code", "Claude Code"], ["ai-agents", "AI agents"], ["text-to-speech", "Voice / TTS"], ["video-generation", "Video gen"], ["remotion", "Remotion"], ["llm-tools", "LLM tools"]];
 const ROW_ART = { releases: "releases", agents: "agents", video: "video", voice: "voice", free: "open", latest: "default" };
@@ -27,6 +36,10 @@ const S = {
   limit: PAGE, ask: null, askMode: "help", askIdea: "", after: [], synth: new Map(),
 };
 let ambient;
+const g = (name, cls = "") => `<svg class="g ${cls}" viewBox="0 0 24 24" aria-hidden="true">${GLYPHS[name] || GLYPHS.grid}</svg>`;
+async function copy(text, done = "Copied") {
+  try { await navigator.clipboard.writeText(text); toast(done); } catch { window.prompt("Copy this", text); }
+}
 
 // ---------- small helpers ----------
 function localGet(k, d) { try { const v = localStorage.getItem("mkn." + k); return v == null ? d : JSON.parse(v); } catch { return d; } }
@@ -130,16 +143,24 @@ function saveBtn(it, cls = "") {
   return `<button class="pill glass ${cls}" type="button" data-act="save" data-id="${esc(it.id)}" aria-pressed="${on}">${icon(on ? "bookmark-fill" : "bookmark")}<span>${on ? "Saved" : "Save"}</span></button>`;
 }
 const link = (it, text, cls = "") => `<a class="${cls}" href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" dir="auto">${esc(text)}</a>`;
-const pic = (d) => (d.pic ? `<img class="pic" src="${esc(d.pic)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : "");
 function artStyle(name, k = 0) {
   const [pos, zoom] = CROPS[k % CROPS.length];
   return `--art:${artCss(name)};--pos:${pos};--zoom:${zoom}`;
 }
+// A story's picture, in order: its own (og:image, GitHub preview, YouTube or paper thumbnail), its source's logo on a
+// tinted card, then the artwork. The artwork stays underneath (--art) and returns if a picture fails to load.
+function thumb(it, rowArt = "") {
+  const t = thumbOf(it, rowArt);
+  if (t.kind === "photo") return { cls: ` has-pic${t.card ? " card-pic" : ""}`, inner: `<img class="pic" src="${esc(t.src)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` };
+  if (t.kind === "logo") return { cls: " has-logo", inner: `<span class="logo-tile"><img class="logo" src="${esc(t.src)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span>` };
+  return { cls: "", inner: "" };
+}
 
 function card(it, { wide = false, k = 0, rowArt = "", note = "" } = {}) {
   const d = view(it);
-  return `<article class="card${wide ? " wide" : ""}${d.state ? " is-status" : ""}" data-id="${esc(it.id)}" style="${artStyle(artName(it, rowArt), k)}">
-    <div class="art" aria-hidden="true">${pic(d)}</div>
+  const t = thumb(it, rowArt);
+  return `<article class="card${wide ? " wide" : ""}${d.state ? " is-status" : ""}${t.cls}" data-id="${esc(it.id)}" style="${artStyle(artName(it, rowArt), k)}">
+    <div class="art" aria-hidden="true">${t.inner}</div>
     <div class="body">
       <p class="kicker">${kicker(it)}</p>
       <h3 class="title">${link(it, d.title, "stretch")}</h3>
@@ -169,6 +190,8 @@ function pickHero() {
   // The newest Anthropic or Claude story of the last 24 h (a resolved outage is not a top story), else the best score.
   const claude = S.items.filter((i) => TOPIC.claude.test(i) || ["anthropic", "claude-code", "status-anthropic"].includes(i.source));
   const fresh = claude.filter((i) => hoursAgo(i) <= 24 && (i.kind !== "status" || incidentOpen(i))).sort(byNewest);
+  const pictured = fresh.filter((i) => thumbOf(i).kind === "photo" && !thumbOf(i).card); // a real photo lights the page best
+  if (pictured.length) return pictured[0];
   if (fresh.length) return fresh[0];
   return [...S.items].filter((i) => i.kind !== "status" || incidentOpen(i)).sort((a, b) => b.score - a.score || byNewest(a, b))[0] || S.items[0];
 }
@@ -176,7 +199,7 @@ function billboard(it) {
   const d = view(it);
   const line = d.why || d.line;
   return `<section class="billboard" data-id="${esc(it.id)}" aria-labelledby="hero-title">
-    <div class="hero-art" aria-hidden="true"><img class="hero-img" src="${artUrl(artName(it))}" alt=""></div>
+    <div class="hero-art" aria-hidden="true"><img class="hero-img" src="${esc(thumbOf(it).kind === "photo" ? thumbOf(it).src : artUrl(artName(it)))}" data-art="${esc(artUrl(artName(it)))}" alt="" referrerpolicy="no-referrer"></div>
     <div class="hero-copy">
       <p class="kicker">${kicker(it, "Top story")}</p>
       <h1 id="hero-title" dir="auto">${link(it, d.title)}</h1>
@@ -338,8 +361,9 @@ function itemRow(it, k) {
   const d = view(it);
   const tags = (it.tags || []).filter((t) => t !== "today").slice(0, 3).map((t) => `<span class="tag">${esc(t.replace("-", " "))}</span>`).join("");
   const sum = it.kind === "release" ? releaseChanges(it.summary).slice(0, 2).join(" · ") : d.line;
+  const t = thumb(it);
   return `<article class="item" data-id="${esc(it.id)}">
-    <a class="thumb" href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true" style="${artStyle(artName(it), k)}"><span class="art">${pic(d)}</span></a>
+    <a class="thumb${t.cls}" href="${esc(safeUrl(it.url))}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true" style="${artStyle(artName(it), k)}"><span class="art">${t.inner}</span></a>
     <div class="item-body">
       <p class="kicker">${kicker(it)}<i aria-hidden="true">·</i><span>${esc(KIND_LABEL[it.kind] || it.kind)}</span></p>
       <h3 class="item-title">${link(it, d.title, "stretch")}</h3>
@@ -356,6 +380,23 @@ function segNav() {
   const subs = [["stories", "Stories", "#/discover"], ["models", "Models & prices", "#/discover/models"], ["repos", "Repos", "#/discover/repos"]];
   return `<nav class="seg" aria-label="Discover"><span class="ink" aria-hidden="true"></span>${subs.map(([v, l, h]) => `<a href="${h}" aria-current="${S.sub === v ? "page" : "false"}">${l}</a>`).join("")}</nav>`;
 }
+// Every topic as a tile with a real picture: the newest story in it that has one (else a logo, else the artwork).
+function topicTiles() {
+  const used = new Set(); // each tile its own picture: a photo first, then a designed card, then a logo
+  const pick = (list, ok) => list.find((i) => { const th = thumbOf(i); return ok(th) && !used.has(th.src); });
+  const tiles = TOPICS.map((t) => {
+    const list = S.items.filter(t.test).sort(byNewest);
+    if (!list.length) return "";
+    const lead = pick(list, (th) => th.kind === "photo" && !th.card) || pick(list, (th) => th.kind === "photo")
+      || pick(list, (th) => th.kind === "logo") || list[0];
+    used.add(thumbOf(lead).src);
+    const th = thumb(lead, ROW_ART[t.id] || "");
+    return `<a class="topic-tile${th.cls}" href="#/discover?t=${t.id}" style="${artStyle(artName(lead, ROW_ART[t.id] || ""), 0)}">
+      <span class="art" aria-hidden="true">${th.inner}</span>
+      <span class="tt-label"><b>${esc(t.label)}</b><span>${plural(list.length, "story", "stories")}</span></span></a>`;
+  }).join("");
+  return tiles ? `<nav class="topic-tiles" aria-label="Topics">${tiles}</nav>` : "";
+}
 function storiesView() {
   if (!S.items.length) return emptyFeed();
   const list = filteredStories();
@@ -367,6 +408,7 @@ function storiesView() {
   const empty = `<div class="quiet-box"><b>Nothing matches.</b> ${S.query ? "Try fewer words, or" : "Try"} another topic.${S.query || S.topic ? ` <button class="link" type="button" data-act="clear">Show every story</button>` : ""}</div>`;
   return `<div class="disc">
     <div class="disc-main">
+      ${S.query || S.topic ? "" : topicTiles()}
       <header class="list-head"><h1>${esc(title)}</h1><p>${esc(count)}${S.query || S.topic ? ` <button class="link" type="button" data-act="clear">Clear</button>` : ""}</p></header>
       <div class="items">${rows || empty}</div>
       ${left > 0 ? `<div class="more"><button class="pill glass" type="button" data-act="more">Show ${Math.min(PAGE, left)} more</button></div>` : ""}
@@ -474,9 +516,9 @@ function discoverView() {
 function savedView() {
   const rows = S.saved.map((e, k) => {
     const it = S.byId.get(e.item?.id) || { ...e.item, tags: [], metrics: {} };
-    const d = view(it);
+    const t = thumb(it);
     return `<article class="item saved" data-key="${esc(e.key)}">
-      <a class="thumb" href="${esc(safeUrl(e.item.url))}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true" style="${artStyle(artName(it), k)}"><span class="art">${pic(d)}</span></a>
+      <a class="thumb${t.cls}" href="${esc(safeUrl(e.item.url))}" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true" style="${artStyle(artName(it), k)}"><span class="art">${t.inner}</span></a>
       <div class="item-body">
         <p class="kicker"><b>${esc(e.mode === "idea" ? "Discuss my idea" : "Does this help me?")}</b><i aria-hidden="true">·</i><span>saved ${esc(ago(e.at))}</span></p>
         <h3 class="item-title"><a class="stretch" href="${esc(safeUrl(e.item.url))}" target="_blank" rel="noopener" dir="auto">${esc(e.item.title)}</a></h3>
@@ -490,6 +532,7 @@ function savedView() {
       </div></article>`;
   }).join("");
   return `<div class="page saved-page">
+    <a class="link back-link" href="#/settings">${icon("chevron-left")}Settings</a>
     <header class="list-head"><h1>Saved for Claude</h1><p>Things you sent to Claude. They’re also on the PC as <b>for-claude.md</b> in the launcher’s data folder, so any Claude or Codex session can read them.</p></header>
     ${rows ? `<div class="items">${rows}</div>` : `<section class="empty lit small" style="${artStyle("default", 2)}"><div class="art" aria-hidden="true"></div><div class="body"><h2>Nothing saved yet</h2><p>Tap Ask Claude or Save on any story and it waits here, ready to open in Claude.</p><div class="acts"><a class="pill white" href="#/home">${icon("home")}<span>Back to the news</span></a></div></div></section>`}
   </div>`;
@@ -569,7 +612,10 @@ async function saveFor(item, mode = "help", idea = "", quiet = false) {
 // ---------- actions ----------
 const itemFor = (el) => S.byId.get(el.dataset.id) || S.synth.get(el.dataset.id);
 async function act(name, el) {
+  if (name.startsWith("reel-")) return reels.act(name, el);
+  if (name.startsWith("set-")) return settings.act(name, el);
   switch (name) {
+    case "needs-pc": toast(source.REASON[el.dataset.why] || source.REASON.default); break;
     case "clear": S.query = ""; $("#q").value = ""; S.limit = PAGE; if (S.topic) location.hash = "#/discover"; else renderView(); break;
     case "more": S.limit += PAGE; renderView(true); break;
     case "page": page(el.closest("[data-row]"), Number(el.dataset.dir)); break;
@@ -648,6 +694,13 @@ function pollRefresh() {
   };
   setTimeout(tick, 2500);
 }
+
+// ---------- Reels and Settings: the launcher's own modules ----------
+const reels = createReels({
+  $, $$, esc, g, api, post, toast, copy, openPanel() {}, closePanel() {}, place: "news",
+  ask: (item, trigger) => openAsk(S.byId.get(item.id) || item, trigger), // MK News' own Ask Claude sheet
+});
+const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () => "dark", setTheme() {}, place: "news", frame: settingsFrame }, reels);
 
 // ---------- data ----------
 function index() {
@@ -740,30 +793,36 @@ function renderView(keepScroll = false) {
   const y = scrollY;
   S.after = [];
   const v = $("#view");
-  v.innerHTML = S.route === "discover" ? discoverView() : S.route === "saved" ? savedView() : homeView();
+  if (S.route !== "reels") reels.unmount();
+  if (S.route === "reels") { v.innerHTML = reels.render(); S.after.push(() => reels.mount()); }
+  else if (S.route === "settings") { v.innerHTML = settingsFrame(settings.render()); S.after.push(() => settings.mount()); }
+  else v.innerHTML = S.route === "discover" ? discoverView() : S.route === "saved" ? savedView() : homeView();
   mountRows(v);
   syncInk($(".seg", v));
   const jobs = S.after;
   S.after = [];
   for (const fn of jobs) { try { fn(); } catch (e) { console.error(e); } }
   if (S.route === "home") lightHero(); else ambient.dim(true);
+  document.documentElement.classList.toggle("route-reels", S.route === "reels");
   if (keepScroll) scrollTo(0, y);
 }
 function render() {
   document.body.dataset.view = S.route;
-  for (const a of $$(".tabs [data-route], .tabbar [data-route]")) a.setAttribute("aria-current", a.dataset.route === S.route ? "page" : "false");
-  for (const a of $$(".tabbar a")) a.innerHTML = tabInner(a.dataset.route, a.dataset.route === S.route);
+  const tabOf = S.route === "saved" ? "settings" : S.route; // Saved sits inside Settings
+  for (const a of $$(".tabs [data-route], .tabbar [data-route]")) a.setAttribute("aria-current", a.dataset.route === tabOf ? "page" : "false");
+  for (const a of $$(".tabbar a")) a.innerHTML = tabInner(a.dataset.route, a.dataset.route === tabOf);
   syncInk($(".tabs"));
   paintChips();
   paintEdition();
-  const titles = { home: "MK News", discover: "Discover · MK News", saved: "Saved · MK News" };
+  const titles = { home: "MK News", reels: "Reels · MK News", discover: "Topics · MK News", settings: "Settings · MK News", saved: "Saved · MK News" };
   document.title = titles[S.route];
   renderView();
 }
 function tabInner(route, on) {
-  const [name, label] = { home: ["home", "Home"], discover: ["topics", "Topics"], saved: ["bookmark", "Saved"] }[route];
+  const [, label, , name] = TABS.find((t) => t[0] === route);
   return `${icon(on ? `${name}-fill` : name)}<span>${label}</span>`;
 }
+function settingsFrame(html) { return `<div class="page"><header class="list-head"><h1>Settings</h1></header>${html}</div>`; }
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 function parseHash() {
   const h = location.hash.startsWith("#/") ? location.hash.slice(2) : "";
@@ -772,7 +831,7 @@ function parseHash() {
   const parts = path.split("/").filter(Boolean);
   const legacy = { foryou: ["home"], models: ["discover", "models"], repos: ["discover", "repos"] };
   let [route, sub] = own(legacy, parts[0]) ? legacy[parts[0]] : parts;
-  if (!["home", "discover", "saved"].includes(route)) route = "home";
+  if (!ROUTES.includes(route)) route = "home";
   S.route = route;
   S.sub = route === "discover" ? (["models", "repos"].includes(sub) ? sub : "stories") : "";
   S.topic = route === "discover" && own(TOPIC, q.get("t")) ? q.get("t") : "";
@@ -788,7 +847,7 @@ function route() {
   render();
 }
 function shell() {
-  const tabs = [["home", "Home", "#/home"], ["discover", "Discover", "#/discover"], ["saved", "Saved", "#/saved"]];
+  const tabs = TABS.map(([r, l, h]) => [r, r === "discover" ? "Discover" : l, h]);
   $("#bar").innerHTML = `
     <a class="wordmark" href="#/home" aria-label="MK News, home">MK News</a>
     <div class="bar-mid">
@@ -800,7 +859,7 @@ function shell() {
       <a class="round phone-only" href="../" aria-label="Back to the launcher">${icon("grid")}</a>
       <button class="round phone-only" type="button" data-act="search" aria-label="Search news">${icon("search")}</button>
     </div>`;
-  $("#tabbar").innerHTML = tabs.map(([r, , h]) => `<a href="${h}" data-route="${r}">${tabInner(r, false)}</a>`).join("");
+  $("#tabbar").innerHTML = TABS.map(([r, , h]) => `<a href="${h}" data-route="${r}">${tabInner(r, false)}</a>`).join("");
 }
 function bind() {
   document.addEventListener("click", (e) => {
@@ -821,6 +880,7 @@ function bind() {
       }
       return;
     }
+    if (S.route === "reels" && reels.keydown(e)) { e.preventDefault(); return; }
     if (e.key === "/" && !/input|textarea/i.test(document.activeElement?.tagName || "")) { e.preventDefault(); $("#q").focus(); }
   });
   const q = $("#q");
@@ -838,7 +898,18 @@ function bind() {
   });
   // Story pictures fade in once loaded; dead ones disappear and leave the artwork (inline handlers are blocked by the CSP).
   document.addEventListener("load", (e) => { if (e.target.tagName === "IMG" && e.target.classList.contains("pic")) e.target.classList.add("on"); }, true);
-  document.addEventListener("error", (e) => { if (e.target.tagName === "IMG" && e.target.classList.contains("pic")) e.target.remove(); }, true);
+  document.addEventListener("load", (e) => { if (e.target.tagName === "IMG" && e.target.classList.contains("logo")) e.target.closest(".logo-tile")?.classList.add("on"); }, true);
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (img.tagName !== "IMG") return;
+    if (img.classList.contains("pic") || img.classList.contains("logo")) {
+      img.closest(".has-pic, .has-logo")?.classList.remove("has-pic", "has-logo", "card-pic"); // the artwork underneath returns
+      (img.closest(".logo-tile") || img).remove();
+    } else if (img.classList.contains("hero-img") && img.dataset.art && img.getAttribute("src") !== img.dataset.art) {
+      img.src = img.dataset.art;
+      ambient.light(img.dataset.art);
+    }
+  }, true);
   window.addEventListener("hashchange", route);
   const bar = () => document.documentElement.style.setProperty("--bar", Math.min(1, scrollY / 80).toFixed(3));
   window.addEventListener("scroll", bar, { passive: true });

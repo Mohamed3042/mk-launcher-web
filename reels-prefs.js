@@ -25,6 +25,7 @@ export function devicePrefs(storage) {
 // How long a reel stays before it moves on: a beat to look, then the words at a calm reading speed.
 export const PACE = { relaxed: 170, normal: 230, fast: 320 }; // words per minute
 export function readingMs(reel, pace = "normal") {
+  if (reel.kind === "clip") return Math.round(Math.min(95000, Math.max(5000, (Number(reel.duration) || 30) * 1000 + 600))); // its own length
   const words = [reel.title, reel.why, ...(reel.gist || [])].join(" ").split(/\s+/).filter(Boolean).length;
   const wpm = PACE[pace] || PACE.normal;
   const look = pace === "fast" ? 1800 : pace === "relaxed" ? 3200 : 2400;
@@ -50,3 +51,16 @@ export function openIndex({ items = [], seen = [], resume = true, activeId = nul
 // A picture URL as a CSS url(): quotes, brackets, backslashes and spaces are percent-encoded, so a URL can
 // never close the url() and add CSS of its own.
 export const cssUrl = (u) => `url("${String(u || "").replace(/['"()\\\s]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0"))}")`;
+
+// A real clip plays in YouTube's privacy-enhanced embed: muted autoplay inline (iOS needs both), no controls, looping
+// (loop needs playlist=<id>), related videos only from the same channel, and the JS API on for mute/pause commands
+// from this page. modestbranding is left out: YouTube retired it in 2023. Only an 11-character video id is accepted.
+export function playerSrc(id, origin) {
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(id)) return "";
+  const q = new URLSearchParams({ playsinline: "1", autoplay: "1", mute: "1", controls: "0", loop: "1", playlist: id, rel: "0",
+    enablejsapi: "1", iv_load_policy: "3", origin: String(origin || "") });
+  return `https://www.youtube-nocookie.com/embed/${id}?${q}`;
+}
+export const PLAYER_ORIGIN = "https://www.youtube-nocookie.com";
+// The player's postMessage commands (unMute, mute, playVideo, pauseVideo, setVolume).
+export const ytCommand = (func, args = []) => JSON.stringify({ event: "command", func, args });

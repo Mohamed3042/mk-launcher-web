@@ -1,16 +1,19 @@
 // Offline shell: the launcher still opens (with the last known state) when the PC is asleep.
 // Paths are relative to this file, so the same worker runs on the PC (/) and on GitHub Pages (/mk-launcher-web/).
 // It caches only the public shell: never the API, never GitHub, never a request that carries a key.
-const SHELL = "mkl-shell-v6";
+const SHELL = "mkl-shell-v7";
 const SHOTS = "mkl-shots-v1";
 const OURS = ["mkl-shell-", "mkl-shots-"]; // other apps on the same origin (MK Cinema on Pages) keep their caches
 const FILES = [
   "./", "./index.html", "./app.css", "./app.js", "./charts.js", "./glyphs.js", "./manifest.webmanifest",
-  "./reels.js", "./reels-prefs.js", "./settings.js", "./source.js", "./backup-rules.js", "./host.js", "./host-rules.js",
+  "./reels.js", "./reels.css", "./reels-prefs.js", "./settings.js", "./source.js", "./backup-rules.js", "./host.js", "./host-rules.js",
   "./fonts/dm-sans-latin-400-normal.woff2", "./fonts/dm-sans-latin-600-normal.woff2",
   "./fonts/cormorant-garamond-latin-500-normal.woff2", "./icons/icon.svg", "./icons/backup.svg",
   "./news/", "./news/index.html", "./news/news.js", "./news/news.css", "./news/story.js", "./news/rows.js",
-  "./news/ambient.js", "./news/icons.js", "./news/art/default.jpg",
+  "./news/ambient.js", "./news/icons.js",
+  // the artwork: every reel and card without a picture of its own shows one, offline too
+  ...["agents", "claude-code", "claude", "default", "models", "open", "outage", "papers", "prices", "releases", "repos",
+    "status", "video", "voice"].map((a) => `./news/art/${a}.jpg`),
 ];
 const ROOT = new URL("./", self.location).pathname;
 
@@ -49,5 +52,11 @@ self.addEventListener("fetch", (e) => {
       caches.open(SHELL).then((c) => c.put(e.request, copy));
     }
     return res;
-  }).catch(() => caches.match(e.request).then((hit) => hit || caches.match(new URL("./index.html", self.location).href))));
+  }).catch(() => caches.match(e.request).then((hit) => {
+    if (hit) return hit;
+    // only a page load falls back to the app page; a picture or a script that cannot load fails as itself
+    // (the app page answering a picture request left reels black when the PC was briefly unreachable)
+    if (e.request.mode === "navigate") return caches.match(new URL("./index.html", self.location).href);
+    return Response.error();
+  })));
 });

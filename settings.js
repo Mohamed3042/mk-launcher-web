@@ -1,5 +1,7 @@
-// Settings: the choices he decides. Every control changes behaviour: Reels topics, auto-advance and
-// "start where I left off" are shared by his devices (server); voice and read-aloud stay on this device.
+// Settings: the choices he decides. Every control changes behaviour: Reels topics, auto-advance, "start where I
+// left off", video clips and their channel list are shared by his devices (server); voice and read-aloud stay on
+// this device. The launcher (#/settings) and MK News (news/#/settings) run this same module: in MK News (d.place
+// "news") it shows Saved stories, Reels, Video clips and the way back, in the Newsreel look.
 import { devicePrefs } from "./reels-prefs.js";
 import * as source from "./source.js";
 
@@ -15,8 +17,9 @@ const UPDATE_WORDS = {
 
 export function createSettings(d, reels) {
   const { $, esc, g, api, post, toast, ago, theme, setTheme, phonePanel, inside } = d;
+  const inNews = d.place === "news";
   const device = devicePrefs(globalThis.localStorage);
-  const S = { reels: null, health: null, voices: [], busy: false, insideApps: [] };
+  const S = { reels: null, health: null, voices: [], busy: false, insideApps: [], saved: null, clips: null };
   const insideOn = () => { const v = inside?.get(); return typeof v === "boolean" ? v : !!inside?.phone(); };
 
   const shared = () => S.reels?.settings || reels.data?.settings || null;
@@ -57,6 +60,7 @@ export function createSettings(d, reels) {
         ${row("Seen reels", `${seen} of ${total} seen`, `<button class="btn sm ghost" type="button" data-act="set-clear-seen" ${seen ? "" : "disabled"}>${g("rotate-ccw")}Start over</button>`, source.BACKUP ? "device" : "shared")}
       </div>${source.BACKUP ? `<p class="sub needs-pc-line">${g("monitor")}${esc(source.REASON.settings)}</p>` : ""}`;
     }
+    const clipsCard = s ? clipsHtml(s) : "";
     const t = theme();
     const themeSeg = [["auto", "Auto", "sun-moon"], ["dark", "Dark", "moon"], ["light", "Light", "sun"]]
       .map(([v, l, i]) => `<button type="button" data-act="set-theme" data-v="${v}" aria-pressed="${t === v}">${g(i)}${l}</button>`).join("");
@@ -86,8 +90,21 @@ export function createSettings(d, reels) {
       <dt>Commit</dt><dd><span class="mono">${esc(up.head || "–")}</span></dd>
       <dt>Last check</dt><dd>${up.at ? esc(ago(up.at)) : "not yet"}</dd></dl>
       <p class="sub">The PC copy checks GitHub every few minutes and restarts itself on new code.</p>`;
+    if (inNews) {
+      const n = S.saved?.length;
+      return `<div class="settings news-settings">
+      <section class="section"><div class="section-head"><h2>Saved stories</h2></div><div class="set-card">
+        <a class="set-link" href="#/saved">${g("bookmark")}<span><b>Saved for Claude</b><span>${n == null ? "Loading…" : n ? `${n} ${n === 1 ? "story" : "stories"}, ready to open in Claude` : "Nothing saved yet. Tap Save on any story."}</span></span>${n ? `<span class="count num">${n}</span>` : ""}${g("chevron-right")}</a></div></section>
+      <section class="section"><div class="section-head"><h2>Reels</h2></div>${reelsCard}</section>
+      <section class="section"><div class="section-head"><h2>Video clips</h2></div>${clipsCard}</section>
+      <section class="section"><div class="section-head"><h2>About</h2></div><div class="set-card">
+        <a class="set-link" href="../">${g("back")}<span><b>MK Launcher</b><span>All your apps, sites and changes</span></span>${g("chevron-right")}</a>
+        <a class="set-link" href="../#/settings">${g("settings")}<span><b>Launcher settings</b><span>Theme, backup and updates</span></span>${g("chevron-right")}</a></div></section>
+    </div>`;
+    }
     return `<div class="settings">
       <section class="section"><div class="section-head"><h2>Reels</h2></div>${reelsCard}</section>
+      <section class="section"><div class="section-head"><h2>Video clips</h2></div>${clipsCard}</section>
       <section class="section"><div class="section-head"><h2>Appearance</h2></div><div class="set-card">
         ${row("Theme", "Auto follows your device.", `<div class="seg" role="group" aria-label="Theme">${themeSeg}</div>`, "device", " wrap")}</div></section>
       ${source.BACKUP || !inside ? "" : `<section class="section"><div class="section-head"><h2>Apps</h2></div><div class="set-card">
@@ -102,14 +119,37 @@ export function createSettings(d, reels) {
     </div>`;
   }
 
+  // Real clips: the switch, where they come from, and the channel list he edits (add a handle, remove one).
+  function clipsHtml(s) {
+    const st = S.clips || S.reels?.clips || reels.data?.clips || null;
+    const found = st?.channels || {};
+    const chans = (s.channels || []).map((h) => {
+      const f = found[h];
+      const note = !f ? (st?.at ? "Looking soon" : "Not looked at yet") : f.error ? f.error : `${f.found} Shorts`;
+      return `<li class="chan${f?.error ? " bad" : ""}"><span class="chan-name"><b dir="auto">${esc(f?.name || h)}</b><span>${esc(h)} · ${esc(note)}</span></span>
+        <button class="icon-btn" type="button" ${shareAct("set-chan-del")} data-v="${esc(h)}" aria-label="Remove ${esc(h)}">${g("x")}</button></li>`;
+    }).join("");
+    const when = !st ? "" : !st.available ? "yt-dlp is not installed on the PC, so no clips can be found." :
+      st.refreshing ? "Looking for clips now…" : st.at ? `Last looked ${ago(st.at)} · ${st.count} ${st.count === 1 ? "clip" : "clips"} found` : "The first look runs a minute after the PC starts.";
+    return `<div class="set-card">
+      ${row("Video clips", "Real short videos about your topics, mixed into Reels: about two clips for every story. Muted until you tap for sound.", sw("set-clips", s.clips !== false, "Video clips"), "shared")}
+      <div class="set-row col${s.clips === false ? " off" : ""}"><div class="set-text"><b>Channels</b><span>Clips come from these channels' Shorts and from searches for your topics. Only clips from the last 30 days, 90 seconds or less.</span>${when ? `<span class="clip-state">${esc(when)}</span>` : ""}${scope("shared")}</div>
+        <ul class="chans" aria-label="Channels">${chans || `<li class="muted">No channels. Clips come from topic searches only.</li>`}</ul>
+        ${source.BACKUP ? "" : `<form class="chan-add" data-form="chan-add"><label class="sr" for="chan-new">YouTube channel handle</label>
+          <input id="chan-new" type="text" placeholder="Add a channel, like @Fireship" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" maxlength="80">
+          <button class="btn sm" type="submit" data-act="set-chan-add">${g("plus")}Add</button></form>`}</div>
+    </div>`;
+  }
+
   function paint() {
     if (!$(".settings")) return;
     const y = window.scrollY;
-    $("#view").innerHTML = `<h1 class="page-title">Settings</h1>` + render();
+    $("#view").innerHTML = d.frame ? d.frame(render()) : `<h1 class="page-title">Settings</h1>` + render();
     window.scrollTo(0, y);
     bindVoice();
   }
   function bindVoice() {
+    $('[data-form="chan-add"]')?.addEventListener("submit", (e) => { e.preventDefault(); act("set-chan-add"); }); // Enter adds it
     $("#set-voice")?.addEventListener("change", (e) => {
       if (!device.set({ voice: e.target.value })) toast("This browser won't save settings (private mode?)");
       else toast("Voice saved on this device");
@@ -132,11 +172,14 @@ export function createSettings(d, reels) {
   async function mount() {
     bindVoice();
     loadVoices();
-    const [r, h, a] = await Promise.allSettled([api("/api/reels"), api("/api/health"), api("/api/apps")]);
-    if (r.status === "fulfilled") { S.reels = r.value; reels.data = r.value; }
+    const [r, h, a, sv] = await Promise.allSettled([api("/api/reels"), api("/api/health"), inNews ? Promise.resolve(null) : api("/api/apps"),
+      inNews ? api("/api/news/saved") : Promise.resolve(null)]);
+    if (r.status === "fulfilled") { S.reels = r.value; reels.data = r.value; S.clips = r.value.clips || null; }
+    if (sv.status === "fulfilled" && sv.value) S.saved = sv.value.items || [];
+    else if (inNews) S.saved = [];
     if (h.status === "fulfilled") S.health = h.value;
-    if (a.status === "fulfilled") S.insideApps = (a.value.apps || []).filter((x) => x.open === "inside").map((x) => x.name);
-    if (a.status === "fulfilled") { S.selfRepo = a.value.self_repo || ""; S.owner = "Mohamed3042"; S.liveOrigin = a.value.public_origin || ""; }
+    if (a.status === "fulfilled" && a.value) S.insideApps = (a.value.apps || []).filter((x) => x.open === "inside").map((x) => x.name);
+    if (a.status === "fulfilled" && a.value) { S.selfRepo = a.value.self_repo || ""; S.owner = "Mohamed3042"; S.liveOrigin = a.value.public_origin || ""; }
     S.snapAt = source.BACKUP ? source.snapshotAt() : 0;
     paint();
   }
@@ -150,10 +193,12 @@ export function createSettings(d, reels) {
     try {
       const res = await post("/api/settings", { reels: changes });
       S.reels.settings = res.reels;
+      if (res.clips) S.clips = res.clips;
       reels.invalidate();
-      if (changes.topics_off) {
+      if (changes.topics_off || changes.channels || "clips" in changes) {
         const fresh = await api("/api/reels");
         S.reels = fresh; reels.data = fresh;
+        if (fresh.clips) S.clips = fresh.clips;
       } else if (reels.data) reels.data = { ...reels.data, settings: res.reels };
       if (done) toast(done);
     } catch (e) {
@@ -210,6 +255,22 @@ export function createSettings(d, reels) {
         else toast(insideOn() ? "Apps open inside the Launcher on this device" : "Apps open in the browser on this device");
         paint();
         $('[data-act="set-inside"]')?.focus();
+        break;
+      }
+      case "set-clips": await saveShared({ clips: s.clips === false }, s.clips === false ? "Clips are on" : "Clips are off"); $('[data-act="set-clips"]')?.focus(); break;
+      case "set-chan-add": {
+        const input = $("#chan-new");
+        const raw = (input?.value || "").trim();
+        const handle = raw ? (raw.match(/@[A-Za-z0-9._-]+/)?.[0] || `@${raw.replace(/^.*\/(?=[^/]+\/?$)/, "").replace(/\/$/, "")}`) : "";
+        if (!handle || handle === "@") { input?.focus(); break; }
+        if ((s.channels || []).some((h) => h.toLowerCase() === handle.toLowerCase())) { toast(`${handle} is already on the list`); break; }
+        await saveShared({ channels: [...(s.channels || []), handle] }, `Added ${handle}. Looking for its clips now.`);
+        $("#chan-new")?.focus();
+        break;
+      }
+      case "set-chan-del": {
+        const left = (s.channels || []).filter((h) => h !== el.dataset.v);
+        await saveShared({ channels: left }, `Removed ${el.dataset.v}`);
         break;
       }
       case "set-theme": setTheme(el.dataset.v); paint(); $(`[data-act="set-theme"][data-v="${el.dataset.v}"]`)?.focus(); break;

@@ -1,8 +1,11 @@
-// Reels: MK News as full-screen stories you swipe through, watch and listen to.
-// One story per screen: the picture (or the MK News artwork), a big headline, one line on why it matters,
-// up to three short points. Data comes from /api/reels; shared choices from the server, voice from the device.
+// Reels: MK News as full-screen stories and real short videos you swipe through, watch and listen to.
+// One story per screen: its real picture (or its source's logo on a tinted card, or the MK News artwork), a big
+// headline, one line on why it matters, up to three short points. A clip plays the video itself (YouTube's
+// privacy-enhanced embed, muted until he taps for sound; only the reel on screen has a player). Data comes from
+// /api/reels; shared choices from the server, voice from the device. The launcher (#/reels) and MK News
+// (news/#/reels) both run this module: d.place says which page it is in, d.ask lets MK News open its own sheet.
 import { view as storyView, KIND_LABEL, artUrl, promptFor, claudeUrl, ago, setMyWork } from "./news/story.js";
-import { devicePrefs, readingMs, speechTimeoutMs, openIndex, cssUrl } from "./reels-prefs.js";
+import { devicePrefs, readingMs, speechTimeoutMs, openIndex, cssUrl, playerSrc, ytCommand, PLAYER_ORIGIN } from "./reels-prefs.js";
 import { BACKUP, REASON } from "./source.js";
 
 const TOPIC = { "claude-code": "Claude Code", anthropic: "Anthropic", models: "Models", prices: "Prices", voice: "Voice",
@@ -13,11 +16,15 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 
 export function createReels(d) {
   const { $, $$, esc, g, api, post, toast, copy, openPanel, closePanel } = d;
+  const inNews = d.place === "news";
+  const newsLink = inNews ? "#/home" : "news/";
+  const settingsLink = "#/settings";
   const device = devicePrefs(globalThis.localStorage);
   const R = {
     data: readCache(), saved: [], activeId: null, active: -1, paused: false, speaking: false, utter: null,
     timer: null, tLeft: 0, tStart: 0, seenTimer: null, queue: new Set(), flushTimer: null, observer: null,
     mounted: false, opened: false, polls: 0, pollTimer: null, wheelAt: 0, glowOn: 0, askMode: "help", askIdea: "", ask: null,
+    sound: false,
   };
 
   function readCache() { try { return JSON.parse(localStorage.getItem(CACHE) || "null"); } catch { return null; } }
@@ -31,6 +38,7 @@ export function createReels(d) {
 
   // ---------- what a reel says ----------
   function kindLabel(r) {
+    if (r.kind === "clip") return "Video";
     if (r.kind === "repo") return "Trending repo";
     if (r.kind === "status") return "Claude status";
     if (r.kind !== "article") return KIND_LABEL[r.kind] || "News";
@@ -52,7 +60,7 @@ export function createReels(d) {
     return esc(t);
   }
   const sizeOf = (t) => (t.length > 110 ? "t-s" : t.length > 64 ? "t-m" : "t-l");
-  const bgOf = (r) => r.image || artUrl(r.art || "default");
+  const bgOf = (r) => r.image || r.logo || artUrl(r.art || "default");
   function factHtml(f) {
     const mark = f.label === "Now" ? `<i class="mark ${f.value === "Ongoing" ? "down" : "up"}" aria-hidden="true"></i>` : "";
     return `<li>${mark}<span>${esc(f.label)}</span><b class="num">${esc(f.value)}</b></li>`;
@@ -64,11 +72,31 @@ export function createReels(d) {
       ${r.gist?.length ? `<ul class="reel-gist">${r.gist.slice(0, 3).map((p) => `<li dir="auto">${esc(p)}</li>`).join("")}</ul>` : ""}
       ${r.facts?.length ? `<ul class="reel-facts" aria-label="Facts">${r.facts.map(factHtml).join("")}</ul>` : ""}`;
   }
+  // The picture, in order: the story's own (or the clip's thumbnail), its source's logo on a tinted card, the artwork.
+  // The artwork is an <img> in the markup, so it never waits for a script (an art reel used to stay black on the
+  // iPhone); pictures from the web load lazily around the reel on screen and fall back to the artwork if they fail.
+  function mediaHtml(r) {
+    const art = esc(artUrl(r.art || "default"));
+    if (r.image) return `<img class="reel-art blur" data-src="${esc(r.image)}" data-art="${art}" alt="" referrerpolicy="no-referrer" decoding="async">`;
+    if (r.logo) return `<div class="reel-tint"></div><img class="reel-art" data-art="${art}" alt="" hidden>`;
+    return `<img class="reel-art" src="${art}" data-art="${art}" alt="" decoding="async">`;
+  }
+  const isClip = (r) => r.kind === "clip" && /^[A-Za-z0-9_-]{11}$/.test(r.video || "");
+  function frontHtml(r) {
+    if (isClip(r)) {
+      return `<div class="reel-video" data-video="${esc(r.video)}" aria-hidden="true">${r.image ? `<img class="poster" data-src="${esc(r.image)}" alt="" referrerpolicy="no-referrer" decoding="async">` : ""}</div>`;
+    }
+    if (r.image) return `<div class="reel-photo" aria-hidden="true"><img data-src="${esc(r.image)}" alt="" referrerpolicy="no-referrer" decoding="async"></div>`;
+    if (r.logo) return `<div class="reel-photo logo" aria-hidden="true"><span class="reel-logo"><img data-src="${esc(r.logo)}" alt="" referrerpolicy="no-referrer" decoding="async"></span></div>`;
+    return "";
+  }
   function reelHtml(r, i, n) {
-    const photo = r.image ? `<div class="reel-photo" aria-hidden="true"><img data-src="${esc(r.image)}" alt="" referrerpolicy="no-referrer" decoding="async"></div>` : "";
-    return `<article class="reel${r.image ? " has-photo" : ""}" data-i="${i}" data-id="${esc(r.id)}" aria-posinset="${i + 1}" aria-setsize="${n}" aria-labelledby="rh-${i}" tabindex="-1">
-      <div class="reel-media" aria-hidden="true"><div class="reel-bg" data-bg="${esc(bgOf(r))}" data-art="${esc(artUrl(r.art || "default"))}"></div></div>
-      <div class="reel-shade" aria-hidden="true"></div>${photo}
+    const clip = isClip(r);
+    const cls = clip ? " clip" : r.image ? " has-photo" : r.logo ? " has-logo" : "";
+    return `<article class="reel${cls}" data-i="${i}" data-id="${esc(r.id)}" aria-posinset="${i + 1}" aria-setsize="${n}" aria-labelledby="rh-${i}" tabindex="-1">
+      <div class="reel-media" aria-hidden="true">${mediaHtml(r)}</div>
+      ${clip ? frontHtml(r) : ""}<div class="reel-shade" aria-hidden="true"></div>${clip ? "" : frontHtml(r)}
+      ${clip ? `<button class="reel-sound" type="button" data-act="reel-sound" aria-pressed="false">${g("volume-x")}<span>Tap for sound</span></button>` : ""}
       <div class="reel-progress" aria-hidden="true"><i></i></div>
       <header class="reel-top"><span class="src" dir="auto">${esc(sourceOf(r))}</span><span class="kind">${esc(kindLabel(r))}</span>
         <span class="age">${esc(ago(r.published))}</span><span class="grow"></span><span class="count num">${i + 1} / ${n}</span></header>
@@ -77,13 +105,13 @@ export function createReels(d) {
   }
   function caughtHtml(n) {
     return `<section class="reel caught" data-i="${n}" data-id="" aria-label="You're all caught up" tabindex="-1">
-      <div class="reel-media" aria-hidden="true"><div class="reel-bg" data-bg="${artUrl("default")}"></div></div>
+      <div class="reel-media" aria-hidden="true"><img class="reel-art" src="${esc(artUrl("default"))}" alt=""></div>
       <div class="reel-shade" aria-hidden="true"></div>
       <div class="caught-body">${g("check", "big")}<h2>You're all caught up</h2>
-        <p>That's every reel from MK News for now. New stories land through the day.</p>
+        <p>That's every reel and clip for now. New stories land through the day.</p>
         <div class="btns"><button class="btn primary" data-act="reel-restart">${g("rotate-ccw")}Start over</button>
-        <a class="btn" href="news/">${g("news")}Open MK News</a></div>
-        <a class="link-btn" href="#/settings">Change topics</a></div>
+        <a class="btn" href="${newsLink}">${g("news")}${inNews ? "Back to the news" : "Open MK News"}</a></div>
+        <a class="link-btn" href="${settingsLink}">Change topics</a></div>
     </section>`;
   }
   function emptyHtml() {
@@ -92,9 +120,9 @@ export function createReels(d) {
       : (settings().topics_off || []).length ? "No stories in the topics you have on. Switch more topics on in Settings."
       : "No stories yet. MK News checks its sources every half hour.";
     return `<section class="reel caught" data-i="0" data-id="" tabindex="-1">
-      <div class="reel-media" aria-hidden="true"><div class="reel-bg" data-bg="${artUrl("default")}"></div></div><div class="reel-shade" aria-hidden="true"></div>
+      <div class="reel-media" aria-hidden="true"><img class="reel-art" src="${esc(artUrl("default"))}" alt=""></div><div class="reel-shade" aria-hidden="true"></div>
       <div class="caught-body">${g("news", "big")}<h2>Nothing to watch yet</h2><p>${esc(why)}</p>
-        <div class="btns">${BACKUP ? `<button class="btn primary needs-pc" type="button" data-act="needs-pc" data-why="news" aria-disabled="true">${g("refresh")}Check for news</button>` : `<button class="btn primary" data-act="reel-refresh">${g("refresh")}Check for news</button>`}<a class="btn" href="#/settings">${g("settings")}Settings</a></div></div></section>`;
+        <div class="btns">${BACKUP ? `<button class="btn primary needs-pc" type="button" data-act="needs-pc" data-why="news" aria-disabled="true">${g("refresh")}Check for news</button>` : `<button class="btn primary" data-act="reel-refresh">${g("refresh")}Check for news</button>`}<a class="btn" href="${settingsLink}">${g("settings")}Settings</a></div></div></section>`;
   }
   function railHtml() {
     const b = (act, icon, label) => `<button class="rb" type="button" data-act="${act}">${g(icon)}<span>${label}</span></button>`;
@@ -138,6 +166,7 @@ export function createReels(d) {
     $("#reels").addEventListener("wheel", onWheel, { passive: false });
     $("#reel-open").addEventListener("click", () => { const r = cur(); if (r) markSeen(r.id); });
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("message", onPlayer);
     if (R.data) openAt(startIndex(), true);
     const moved = () => { R.moved = true; };
     track.addEventListener("touchstart", moved, { passive: true });
@@ -158,6 +187,8 @@ export function createReels(d) {
     clearTimeout(R.seenTimer); clearTimeout(R.pollTimer);
     R.observer?.disconnect(); R.observer = null;
     document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("message", onPlayer);
+    stopVideo();
     flushSeen();
     R.active = -1;
     if (!keepRoute) document.documentElement.classList.remove("route-reels");
@@ -227,6 +258,7 @@ export function createReels(d) {
     $$(".reels-track > [data-i]").forEach((el) => el.classList.toggle("active", Number(el.dataset.i) === i));
     hydrate(i);
     glow(i);
+    playVideo(i);
     paintRail();
     paintState();
     const live = $("#reel-live");
@@ -237,16 +269,65 @@ export function createReels(d) {
     if (device.get().readAloud) speak(r, true);
   }
 
-  // Load pictures only around the reel on screen, so the first one paints at once.
+  // Load pictures from the web only around the reel on screen, so the first one paints at once.
   function hydrate(i) {
     for (let j = i - 1; j <= i + 2; j++) {
       const el = $(`.reels-track > [data-i="${j}"]`);
       if (!el) continue;
-      const bg = el.querySelector(".reel-bg[data-bg]");
-      if (bg) { bg.style.backgroundImage = cssUrl(bg.dataset.bg); bg.removeAttribute("data-bg"); }
-      const img = el.querySelector("img[data-src]");
-      if (img) { img.src = img.dataset.src; img.removeAttribute("data-src"); }
+      for (const img of el.querySelectorAll("img[data-src]")) { img.src = img.dataset.src; img.removeAttribute("data-src"); }
     }
+  }
+
+  // ---------- clips: one live player, on the reel on screen ----------
+  function playerOf(i = R.active) { return $(`.reels-track > [data-i="${i}"] .reel-video iframe`); }
+  function send(func, args = [], frame = playerOf()) {
+    try { frame?.contentWindow?.postMessage(ytCommand(func, args), PLAYER_ORIGIN); } catch { /* gone */ }
+  }
+  function stopVideo(except = -1) {
+    for (const f of $$(".reels-track .reel-video iframe")) {
+      const reel = f.closest(".reel");
+      if (Number(reel?.dataset.i) === except) continue;
+      reel?.classList.remove("playing");
+      f.remove(); // off screen: no player at all, so nothing plays or loads
+    }
+  }
+  function playVideo(i) {
+    stopVideo(i);
+    const box = $(`.reels-track > [data-i="${i}"] .reel-video`);
+    if (!box || box.querySelector("iframe")) return;
+    const src = playerSrc(box.dataset.video, location.origin);
+    if (!src) return;
+    const f = document.createElement("iframe");
+    f.src = src;
+    f.title = "Video";
+    f.allow = "autoplay; encrypted-media; picture-in-picture";
+    f.referrerPolicy = "strict-origin-when-cross-origin";
+    f.tabIndex = -1;
+    f.addEventListener("load", () => {
+      try { f.contentWindow.postMessage(JSON.stringify({ event: "listening", id: box.dataset.video }), PLAYER_ORIGIN); } catch { /* gone */ }
+      send("addEventListener", ["onStateChange"], f);
+      if (R.sound) { send("unMute", [], f); send("setVolume", [100], f); }
+      if (R.paused || document.hidden) send("pauseVideo", [], f);
+    });
+    box.appendChild(f);
+    paintSound();
+  }
+  // The player says when it really plays: only then the thumbnail gives way (never a black frame).
+  function onPlayer(e) {
+    if (e.origin !== PLAYER_ORIGIN) return;
+    let m;
+    try { m = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch { return; }
+    const state = m?.event === "onStateChange" ? m.info : m?.event === "infoDelivery" ? m.info?.playerState : undefined;
+    if (typeof state !== "number") return;
+    const f = playerOf();
+    if (!f || e.source !== f.contentWindow) return;
+    if (state === 1) f.closest(".reel")?.classList.add("playing");
+  }
+  function paintSound() {
+    const b = $(`.reels-track > [data-i="${R.active}"] .reel-sound`);
+    if (!b) return;
+    b.setAttribute("aria-pressed", String(R.sound));
+    b.innerHTML = `${g(R.sound ? "volume" : "volume-x")}<span>${R.sound ? "Sound on" : "Tap for sound"}</span>`;
   }
   function glow(i) {
     const layers = $$(".reels-glow i");
@@ -258,14 +339,23 @@ export function createReels(d) {
     layers[R.glowOn].classList.add("on");
     layers[1 - R.glowOn].classList.remove("on");
   }
+  // A picture from the web that fails gives way to the artwork; the artwork itself gets one more try, and if
+  // that fails too the warm light of .reel-media stays (never a black frame).
   function onMediaError(e) {
     const img = e.target;
     if (img?.tagName !== "IMG") return;
     const reel = img.closest(".reel");
-    reel?.classList.remove("has-photo");
+    const art = reel?.querySelector(".reel-art");
+    if (img.classList.contains("poster")) { img.remove(); return; } // the player still plays
+    if (img === art && !art.classList.contains("blur")) {
+      if (!art.dataset.retried) { art.dataset.retried = "1"; setTimeout(() => { art.src = `${art.dataset.art}#again`; }, 1500); }
+      else art.hidden = true;
+      return;
+    }
+    reel?.classList.remove("has-photo", "has-logo");
     img.closest(".reel-photo")?.remove();
-    const bg = reel?.querySelector(".reel-bg");
-    if (bg?.dataset.art) bg.style.backgroundImage = cssUrl(bg.dataset.art); // the artwork stands in for a dead picture
+    reel?.querySelector(".reel-tint")?.remove();
+    if (art?.dataset.art) { art.classList.remove("blur"); art.hidden = false; art.src = art.dataset.art; } // the artwork stands in
   }
 
   // The advance clock: a reading time from the words; it holds while paused or reading aloud.
@@ -306,8 +396,8 @@ export function createReels(d) {
   function togglePause(force) {
     if (!cur()) return;
     R.paused = force ?? !R.paused;
-    if (R.paused) { hold(); if (R.speaking) speechSynthesis.pause(); }
-    else { if (R.speaking) speechSynthesis.resume(); run(); }
+    if (R.paused) { hold(); if (R.speaking) speechSynthesis.pause(); send("pauseVideo"); }
+    else { if (R.speaking) speechSynthesis.resume(); send("playVideo"); run(); }
     const f = $(".reel-flash");
     if (f) { f.innerHTML = g(R.paused ? "pause" : "play"); f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); }
   }
@@ -463,7 +553,7 @@ export function createReels(d) {
     step(e.deltaY > 0 ? 1 : -1);
   }
   function onVisibility() {
-    if (document.hidden) { hold(); flushSeen(); } else if (!R.paused && !R.speaking) run();
+    if (document.hidden) { hold(); flushSeen(); send("pauseVideo"); } else { if (!R.paused) send("playVideo"); if (!R.paused && !R.speaking) run(); }
   }
   function keydown(e) {
     if (!R.mounted || e.ctrlKey || e.metaKey || e.altKey) return false;
@@ -484,7 +574,17 @@ export function createReels(d) {
       case "reel-next": step(1); break;
       case "reel-prev": step(-1); break;
       case "reel-save": if (r) toggleSave(r); break;
-      case "reel-ask": if (r) openAsk(r); break;
+      case "reel-ask":
+        if (!r) break;
+        if (d.ask) { togglePause(true); markSeen(r.id); d.ask(rawItem(r), el); } // MK News opens its own Ask sheet
+        else openAsk(r);
+        break;
+      case "reel-sound": {
+        R.sound = !R.sound;
+        if (R.sound) { send("unMute"); send("setVolume", [100]); send("playVideo"); } else send("mute");
+        paintSound();
+        break;
+      }
       case "reel-listen":
         if (!r) break;
         if (R.speaking) { stopSpeech(); run(); } else { clearTimeout(R.timer); R.timer = null; speak(r); }

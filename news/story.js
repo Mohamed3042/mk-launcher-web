@@ -26,10 +26,9 @@ export const KIND_LABEL = { article: "Article", release: "Release", model: "New 
 
 export const PROVIDER = { anthropic: "Claude", openai: "OpenAI", google: "Google", "x-ai": "xAI", deepseek: "DeepSeek", qwen: "Qwen", "meta-llama": "Meta", mistralai: "Mistral", moonshotai: "Moonshot", "z-ai": "Z.ai" };
 
-// Hosts whose story pictures are designed title cards (white or brand-colour text cards, paper first pages,
-// wordmarks), like GitHub's: in this dark room they read as holes, so the topic artwork stands in for them.
-// Checked against the real feed: Hugging Face blog and paper thumbnails, Google's blog CDNs, Anthropic and
-// claude.com share images are almost all cards. Other pictures (photos, screenshots) are shown, warmly graded.
+// Hosts whose pictures are designed title cards (GitHub's social preview, Hugging Face, Google's blog CDNs,
+// Anthropic share images). They used to be hidden behind the AI artwork; the owner asked for real thumbnails
+// (2026-10-24), so they show now, on a lighter frame (news.css .card-pic).
 export const CARD_HOSTS = /(^|\.)(opengraph\.githubassets\.com|repository-images\.githubusercontent\.com|huggingface\.co|storage\.googleapis\.com|googleusercontent\.com|www-cdn\.anthropic\.com|claude\.com)$/i;
 
 export const toMs = (t) => (typeof t === "number" ? (t < 2e10 ? t * 1000 : t) : Date.parse(t));
@@ -132,10 +131,17 @@ export function artName(it, rowArt) {
 }
 export const artUrl = (name) => new URL(`./art/${name}.jpg`, import.meta.url).href; // works at / and on GitHub Pages
 export const artCss = (name) => `url(${artUrl(name)}), var(--warm)`;
-export function pictureOf(it) {
-  const u = String(it.image || "");
-  if (!u.startsWith("https://")) return "";
-  try { return CARD_HOSTS.test(new URL(u).hostname) ? "" : u; } catch { return ""; }
+const https = (u) => { const s = String(u || ""); try { return s.startsWith("https://") && new URL(s).hostname ? s : ""; } catch { return ""; } };
+// The story's own picture: its og:image or twitter:image, GitHub's social preview, a YouTube or paper thumbnail.
+export const pictureOf = (it) => https(it.image);
+export const isCard = (u) => { try { return CARD_HOSTS.test(new URL(u).hostname); } catch { return false; } };
+// What a story shows, in order: its own picture, its source's logo on a tinted card, and only then the AI artwork.
+export function thumbOf(it, rowArt) {
+  const pic = pictureOf(it);
+  if (pic) return { kind: "photo", src: pic, card: isCard(pic) };
+  const logo = https(it.logo);
+  if (logo) return { kind: "logo", src: logo };
+  return { kind: "art", src: artUrl(artName(it, rowArt)) };
 }
 export function view(it) {
   if (it._v) return it._v;

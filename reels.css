@@ -1,0 +1,251 @@
+/* Reels: full-screen stories and real clips. One stylesheet for the launcher (#/reels) and MK News (news/#/reels):
+   both pages load it next to their own. It reads the launcher's token names; MK News maps them in news.css. */
+
+/* ---------- Reels: MK News as full-screen stories ---------- */
+/* A reel is media: it stays dark in both themes, like a photo or a film still. Only the room around it follows the theme. */
+.reels-stage { position: fixed; z-index: 5; left: 0; right: 0; top: 0; bottom: calc(var(--tab-h) + var(--safe-b) + 18px); }
+.reels-glow { display: none; }
+.reels-col { position: absolute; inset: 0; }
+.reels-track {
+  --ink: #f6f2ec; --ink-2: rgb(246 242 236 / 0.8); --ink-3: rgb(246 242 236 / 0.62);
+  --pill: #f7f5f2; --pill-ink: #0b0b0c; --pill-glow: rgb(255 255 255 / 0.4);
+  --raised: rgb(255 255 255 / 0.12); --hover: rgb(255 255 255 / 0.18); --line: rgb(255 255 255 / 0.16); --line-strong: rgb(255 255 255 / 0.28);
+  --accent: #e9a54b; --accent-soft: rgb(233 165 75 / 0.16);
+  color-scheme: dark;
+  position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scroll-snap-type: y mandatory;
+  scrollbar-width: none; background: #0b0a09; color: var(--ink); border-radius: 0 0 26px 26px; outline: none;
+}
+.reels-track::-webkit-scrollbar { display: none; }
+.reels-track:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.reel {
+  position: relative; height: 100%; overflow: hidden; isolation: isolate;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.reel:focus-visible { outline: none; }
+/* The picture layer. Warm light underneath, so a picture that cannot load is never a black hole. The artwork is an
+   <img> in the markup (no script has to fill it in), and only the reel on screen moves: a paused animation on every
+   reel kept one full-screen GPU layer per reel (23 at once, about 800 MB at the iPhone's 3x), which is how an art
+   reel went black on the iPhone (2026-10-24). */
+.reel-media {
+  position: absolute; inset: 0; z-index: -2; overflow: hidden;
+  background: radial-gradient(120% 80% at 70% 30%, #4a2e14 0%, #22160d 45%, #120e0b 100%);
+}
+.reel-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 72% 50%; transform: scale(1.08); }
+.reel-art[hidden] { display: none; }
+.reel.active .reel-art:not(.blur) { animation: reel-drift 28s ease-in-out infinite alternate; }
+@keyframes reel-drift { from { transform: translate(-2.5%, 0) scale(1.08); } to { transform: translate(2.5%, -2%) scale(1.16); } }
+.reel-art.blur { inset: -12%; width: 124%; height: 124%; filter: blur(30px) saturate(1.15) brightness(0.48); transform: none; }
+.reel-tint {
+  position: absolute; inset: 0;
+  background: radial-gradient(90% 60% at 50% 34%, rgb(233 165 75 / 0.34), transparent 70%),
+              linear-gradient(160deg, #3a2614, #17110c 55%, #0e0b09);
+}
+/* a source's logo on a tinted card, when the story has no picture of its own */
+.reel-photo.logo { align-items: center; }
+.reel-logo {
+  display: grid; place-items: center; width: min(46%, 220px); aspect-ratio: 1; border-radius: 30%;
+  background: rgb(255 248 240 / 0.94); box-shadow: 0 30px 80px -30px rgb(0 0 0 / 0.9), 0 0 0 1px rgb(255 255 255 / 0.2);
+}
+.reel-photo.logo .reel-logo img { width: 62%; height: 62%; max-width: none; max-height: none; object-fit: contain; border: 0; border-radius: 16%; box-shadow: none; animation: none !important; }
+
+/* a real clip: the video fills the reel, the thumbnail holds the frame until the player really plays */
+.reel-video { position: absolute; inset: 0; z-index: -1; overflow: hidden; container-type: size; background: #0b0a09; }
+.reel-video .poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; transition: opacity 500ms var(--ease); }
+.reel.playing .reel-video .poster { opacity: 0; }
+.reel-video iframe {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border: 0; pointer-events: none;
+  /* covers the reel like the thumbnail does; 64 px taller at each end, so the player's own title bar (shown even
+     with controls=0) sits in the letterbox outside the reel and never covers our header */
+  --vw: max(100cqw, 56.25cqh); width: var(--vw); height: calc(var(--vw) * 1.7778 + 128px);
+}
+.reel.clip .reel-shade {
+  background:
+    linear-gradient(to top, rgb(9 8 7 / 0.92) 0%, rgb(9 8 7 / 0.7) 22%, rgb(9 8 7 / 0) 46%),
+    linear-gradient(to bottom, rgb(9 8 7 / 0.55) 0%, rgb(9 8 7 / 0) 16%);
+}
+.reel.clip .reel-copy { grid-row: 3; }
+.reel.clip .reel-title.t-l { font-size: 26px; }
+.reel.clip .reel-title.t-m, .reel.clip .reel-title.t-s { font-size: 21px; }
+.reel.clip .reel-why .txt { -webkit-line-clamp: 2; }
+.reel-sound {
+  position: absolute; z-index: 3; right: 16px; top: calc(var(--safe-t) + 58px); display: inline-flex; align-items: center; gap: 7px;
+  height: 36px; padding: 0 14px 0 11px; border-radius: 999px; border: 1px solid rgb(255 255 255 / 0.22); cursor: pointer;
+  background: rgb(20 18 16 / 0.55); color: #fff; font: 600 13px/1 var(--font);
+  backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+}
+.reel-sound svg.g { width: 17px; height: 17px; }
+.reel-sound::before { content: ""; position: absolute; inset: -5px -2px; } /* a 44px target */
+.reel-sound[aria-pressed="true"] { background: #f7f5f2; color: #0b0b0c; border-color: transparent; }
+.reel-shade {
+  position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    linear-gradient(to top, rgb(9 8 7 / 0.97) 0%, rgb(9 8 7 / 0.9) 30%, rgb(9 8 7 / 0.55) 52%, rgb(9 8 7 / 0) 74%),
+    linear-gradient(to bottom, rgb(9 8 7 / 0.7) 0%, rgb(9 8 7 / 0) 18%);
+}
+.reel-photo { grid-row: 2; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 6px 18px 18px; }
+.reel-photo img {
+  display: block; max-width: 100%; max-height: 100%; min-height: 0; object-fit: contain; border-radius: 18px;
+  border: 1px solid rgb(255 255 255 / 0.14); box-shadow: 0 28px 70px -24px rgb(0 0 0 / 0.85);
+  opacity: 0; transition: opacity 400ms var(--ease);
+}
+.reel-photo img[src] { opacity: 1; }
+.reel.active .reel-photo img { animation: reel-breathe 14s ease-in-out infinite alternate; }
+@keyframes reel-breathe { from { transform: scale(1); } to { transform: scale(1.035); } }
+.reel-progress {
+  position: absolute; z-index: 2; left: 16px; right: 16px; top: calc(var(--safe-t) + 9px); height: 3px; border-radius: 3px;
+  background: rgb(255 255 255 / 0.2); overflow: hidden; opacity: 0; transition: opacity 200ms var(--ease);
+}
+.reel-progress i { display: block; height: 100%; background: #fff; transform-origin: left center; transform: scaleX(0); }
+.reels-stage.timed .reel.active .reel-progress { opacity: 1; }
+.reel.active .reel-progress i { animation: reel-time var(--dur, 8s) linear forwards; }
+.reels-stage.held .reel.active .reel-progress i { animation-play-state: paused; }
+@keyframes reel-time { to { transform: scaleX(1); } }
+.reel-top {
+  grid-row: 1; display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: calc(var(--safe-t) + 22px) 16px 10px; font-size: 13px; font-weight: 600; color: #fff;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.5);
+}
+.reel-top .src { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.reel-top .kind {
+  flex: none; height: 24px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 999px;
+  background: rgb(255 255 255 / 0.14); border: 1px solid rgb(255 255 255 / 0.18); font-size: 12px; text-shadow: none;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.reel-top .age { flex: none; font-weight: 400; color: rgb(255 255 255 / 0.74); }
+.reel-top .grow { flex: 1; }
+.reel-top .count { flex: none; font-weight: 400; font-size: 12px; color: rgb(255 255 255 / 0.6); }
+.reel-copy { grid-row: 3; display: flex; flex-direction: column; gap: 12px; padding: 0 86px 20px 18px; min-width: 0; }
+.reel-title {
+  margin: 0; color: #fff; font-weight: 600; line-height: 1.08; letter-spacing: -0.026em; text-wrap: balance;
+  overflow-wrap: anywhere; text-shadow: 0 2px 22px rgb(0 0 0 / 0.45);
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+.reel-title.t-l { font-size: 31px; }
+.reel-title.t-m { font-size: 26px; line-height: 1.1; }
+.reel-title.t-s { font-size: 22px; line-height: 1.14; letter-spacing: -0.018em; }
+.reel-title .owner { font-weight: 400; color: rgb(255 255 255 / 0.62); }
+.reel-why {
+  margin: 0; display: flex; flex-direction: column; gap: 4px; padding: 10px 13px 11px; border-radius: 15px;
+  background: rgb(255 255 255 / 0.1); border: 1px solid rgb(255 255 255 / 0.15);
+  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  color: #fff; font-size: 15.5px; line-height: 1.38;
+}
+.reel-why .lbl { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: rgb(255 255 255 / 0.72); }
+.reel-why .lbl svg.g { width: 14px; height: 14px; color: #f3c27a; }
+.reel-why .txt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.reel-gist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.reel-gist li {
+  position: relative; padding-left: 16px; font-size: 15px; line-height: 1.4; color: rgb(255 255 255 / 0.88);
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.5);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.reel-gist li::before { content: ""; position: absolute; left: 2px; top: 0.6em; width: 6px; height: 6px; border-radius: 50%; background: rgb(255 255 255 / 0.6); }
+.reel-gist li[dir="rtl"], .reel-gist li:dir(rtl) { padding: 0 16px 0 0; }
+.reel-gist li:dir(rtl)::before { left: auto; right: 2px; }
+.reel-facts { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.reel-facts li {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 999px;
+  background: rgb(255 255 255 / 0.1); border: 1px solid rgb(255 255 255 / 0.14); font-size: 12.5px; white-space: nowrap;
+}
+.reel-facts span { color: rgb(255 255 255 / 0.66); }
+.reel-facts b { font-weight: 600; color: #fff; }
+.reel-facts .mark { width: 8px; height: 8px; flex: none; border-radius: 50%; background: #3fd18c; box-shadow: 0 0 8px rgb(63 209 140 / 0.7); }
+.reel-facts .mark.down { border-radius: 2px; background: transparent; box-shadow: inset 0 0 0 1.75px #ff7b6e; }
+
+/* the action rail: one set of buttons for the reel on screen */
+.reel-rail { position: absolute; z-index: 3; right: 6px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; }
+.reel-rail[hidden] { display: none; }
+.rb {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 68px; padding: 0; border: 0; background: none;
+  color: #fff; font: 600 11px/1.15 var(--font); text-align: center; cursor: pointer; text-shadow: 0 1px 6px rgb(0 0 0 / 0.6);
+  -webkit-tap-highlight-color: transparent;
+}
+.rb svg.g {
+  width: 48px; height: 48px; padding: 13px; border-radius: 50%; stroke-width: 1.8;
+  background: rgb(20 18 16 / 0.5); border: 1px solid rgb(255 255 255 / 0.18); box-shadow: 0 8px 22px -10px rgb(0 0 0 / 0.7);
+  backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  transition: background 150ms var(--ease), color 150ms var(--ease), transform 120ms var(--ease);
+}
+.rb:hover svg.g { background: rgb(40 36 32 / 0.66); }
+.rb:active svg.g { transform: scale(0.94); }
+.rb[aria-pressed="true"] svg.g { background: #f7f5f2; color: #0b0b0c; border-color: transparent; }
+.rb:focus-visible { outline: none; }
+.rb:focus-visible svg.g { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reel-flash {
+  position: absolute; z-index: 3; left: 50%; top: 42%; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: rgb(0 0 0 / 0.42); pointer-events: none; opacity: 0;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.reel-flash svg.g { width: 34px; height: 34px; }
+.reel-flash.on { animation: reel-flash 750ms var(--ease) forwards; }
+@keyframes reel-flash { 0% { opacity: 0; transform: scale(0.8); } 25% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.06); } }
+.reel-state {
+  position: absolute; z-index: 3; left: 16px; top: calc(var(--safe-t) + 58px); display: inline-flex; align-items: center; gap: 6px;
+  height: 28px; padding: 0 11px; border-radius: 999px; background: #f7f5f2; color: #0b0b0c; font-size: 12.5px; font-weight: 600;
+  opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+}
+.reel-state svg.g { width: 14px; height: 14px; }
+.reel-state.on { opacity: 1; transform: none; }
+.reel-nav { display: none; }
+
+/* the end, and an empty feed */
+.reel.caught { display: grid; place-items: center; grid-template-rows: 1fr; }
+.reel.caught .reel-art { filter: blur(6px) brightness(0.55); animation: none; }
+.caught-body { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 340px; padding: 24px; text-align: center; }
+.caught-body svg.big { width: 56px; height: 56px; color: #fff; stroke-width: 1.6; }
+.caught-body h2 { margin: 4px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; color: #fff; }
+.caught-body p { margin: 0; color: rgb(255 255 255 / 0.8); line-height: 1.45; }
+.caught-body .btns { justify-content: center; margin-top: 8px; }
+.caught-body .btn { height: 44px; padding: 0 20px; }
+.caught-body .link-btn { margin-top: 6px; color: #f3c27a; }
+.reel.loading .reel-media { background: linear-gradient(90deg, #15120f, #211c17, #15120f); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+
+@media (min-width: 760px) {
+  .reels-stage { left: var(--rail-w); bottom: 0; display: grid; place-items: center; transition: left 260ms var(--ease); }
+  .reels-glow { display: block; position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .reels-glow i {
+    position: absolute; inset: -18%; background: center / cover no-repeat; opacity: 0;
+    filter: blur(80px) saturate(1.3) brightness(0.62); transition: opacity 900ms var(--ease);
+  }
+  .reels-glow i.on { opacity: 0.72; }
+  .reels-glow::after { content: ""; position: absolute; inset: 0; background: radial-gradient(70% 70% at 50% 50%, transparent 30%, var(--bg) 100%); }
+  .reels-col { position: relative; inset: auto; height: min(calc(100dvh - 48px), 1040px); aspect-ratio: 9 / 16; max-width: calc(100vw - var(--rail-w) - 240px); }
+  .reels-track { border-radius: 28px; box-shadow: 0 40px 120px -40px rgb(0 0 0 / 0.85), 0 0 0 1px rgb(255 255 255 / 0.08); }
+  .reel-copy { padding: 0 24px 26px; gap: 13px; }
+  .reel-top { padding: 24px 22px 10px; }
+  .reel-progress { left: 22px; right: 22px; top: 12px; }
+  .reel-state { left: 22px; top: 62px; }
+  .reel-photo { padding: 4px 22px 20px; }
+  .reel-title.t-l { font-size: 34px; }
+  .reel-title.t-m { font-size: 28px; }
+  .reel-title.t-s { font-size: 24px; }
+  /* beside the column, in the room: follows the theme */
+  .reel-rail { right: auto; left: calc(100% + 16px); bottom: 26px; gap: 12px; }
+  .rb { color: var(--ink-2); text-shadow: none; }
+  .rb svg.g { background: var(--panel); border-color: var(--line-strong); color: var(--ink); box-shadow: none; }
+  .rb:hover svg.g { background: var(--hover); }
+  .rb[aria-pressed="true"] svg.g { background: var(--pill); color: var(--pill-ink); }
+  .reel-nav { display: flex; flex-direction: column; gap: 10px; position: absolute; right: 28px; top: 50%; transform: translateY(-50%); }
+  .reel-nav .icon-btn { width: 48px; height: 48px; border-radius: 50%; border-color: var(--line-strong); background: var(--panel); color: var(--ink);
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); }
+  .reel-nav .icon-btn svg.g { width: 22px; height: 22px; }
+}
+@media (min-width: 760px) and (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) .reels-glow i { filter: blur(80px) saturate(1.2) brightness(1.05); }
+  :root:where(:not([data-theme="dark"])) .reels-glow i.on { opacity: 0.4; }
+}
+@media (min-width: 760px) {
+  :root[data-theme="light"] .reels-glow i { filter: blur(80px) saturate(1.2) brightness(1.05); }
+  :root[data-theme="light"] .reels-glow i.on { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reel-art, .reel.active .reel-art:not(.blur), .reel.active .reel-photo img { animation: none !important; transform: none; }
+  .reel-video .poster { transition: none; }
+  .reel-progress { display: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .rb svg.g, .reel-why, .reel-top .kind, .reel-flash { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .rb svg.g { background: #1c1916; }
+  .reel-why { background: rgb(28 25 22 / 0.92); }
+}
