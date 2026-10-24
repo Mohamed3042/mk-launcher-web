@@ -1,12 +1,12 @@
 // Offline shell: the launcher still opens (with the last known state) when the PC is asleep.
 // Paths are relative to this file, so the same worker runs on the PC (/) and on GitHub Pages (/mk-launcher-web/).
 // It caches only the public shell: never the API, never GitHub, never a request that carries a key.
-const SHELL = "mkl-shell-v5";
+const SHELL = "mkl-shell-v6";
 const SHOTS = "mkl-shots-v1";
 const OURS = ["mkl-shell-", "mkl-shots-"]; // other apps on the same origin (MK Cinema on Pages) keep their caches
 const FILES = [
   "./", "./index.html", "./app.css", "./app.js", "./charts.js", "./glyphs.js", "./manifest.webmanifest",
-  "./reels.js", "./reels-prefs.js", "./settings.js", "./source.js", "./backup-rules.js",
+  "./reels.js", "./reels-prefs.js", "./settings.js", "./source.js", "./backup-rules.js", "./host.js", "./host-rules.js",
   "./fonts/dm-sans-latin-400-normal.woff2", "./fonts/dm-sans-latin-600-normal.woff2",
   "./fonts/cormorant-garamond-latin-500-normal.woff2", "./icons/icon.svg", "./icons/backup.svg",
   "./news/", "./news/index.html", "./news/news.js", "./news/news.css", "./news/story.js", "./news/rows.js",

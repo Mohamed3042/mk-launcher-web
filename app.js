@@ -4,6 +4,8 @@ import * as C from "./charts.js";
 import { createReels } from "./reels.js";
 import { createSettings } from "./settings.js";
 import * as source from "./source.js";
+import { createHost } from "./host.js";
+import * as HR from "./host-rules.js";
 
 const BACKUP = source.BACKUP; // the GitHub Pages copy: reads the PC's last snapshot, greys out what needs the PC
 
@@ -112,6 +114,14 @@ function openLink(app, cls, inner, label = "") {
   if (pcOnly(app)) return greyBtn("open", inner, cls, label);
   return `<a class="${cls}" href="${esc(app.url)}" target="_blank" rel="noopener" data-open="${esc(app.id)}"${label ? ` aria-label="${esc(label)}"` : ""}>${inner}</a>`;
 }
+// Phones (and computers that switched it on in Settings) open framable apps inside the launcher.
+const isPhone = () => !matchMedia("(min-width: 760px)").matches || matchMedia("(hover: none) and (pointer: coarse)").matches;
+const openMode = (app) => HR.openMode(app, { backup: BACKUP, phone: isPhone(), pref: HR.readPref(globalThis.localStorage) });
+function openInside(app) {
+  if ($("#panel").classList.contains("on")) closePanel();
+  host.open(app, appIcon(app, "lg"));
+  recordRecent(app.id);
+}
 function statusEl(app, always = false) {
   const st = stateOf(app);
   if (st === "none" || (!always && (st === "up" || st === "unknown"))) return st === "up" ? `<span class="sr">${statusWord(app)}</span>` : "";
@@ -175,7 +185,9 @@ function section(title, meta, body, extra = "") {
 // ---------- views ----------
 const reels = createReels({ $, $$, esc, g, api, post, toast, copy, openPanel, closePanel });
 const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () => localGet("theme", "auto"),
-  setTheme: (v) => { localSet("theme", v); applyTheme(); } }, reels);
+  setTheme: (v) => { localSet("theme", v); applyTheme(); },
+  inside: { phone: isPhone, get: () => HR.readPref(globalThis.localStorage), set: (on) => HR.writePref(globalThis.localStorage, on) } }, reels);
+const host = createHost({ esc, g, toast });
 const MORE = [["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["news/", "MK News", "news"]];
 const views = {
   home() {
@@ -615,6 +627,7 @@ function appPanel(id) {
   let body = `<div class="btns">
     ${openLink(app, "btn primary", `${g("external")}Open`)}
     ${startButton(app, false)}
+    ${openMode(app) === "inside" ? `<a class="btn" href="${esc(app.url)}" target="_blank" rel="noopener">${g("globe")}In the browser</a>` : ""}
     ${(app.alt || []).map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}
     ${app.repo ? `<a class="btn ghost" href="${esc(app.repo)}" target="_blank" rel="noopener">${g("github")}Code</a>` : ""}
     ${BACKUP ? greyBtn("pins", `${g(pinned ? "pin-off" : "pin")}${pinned ? "Unpin" : "Pin"}`, "btn ghost") : `<button class="btn ghost" data-act="${pinned ? "unpin" : "pin"}" data-id="${esc(id)}">${g(pinned ? "pin-off" : "pin")}${pinned ? "Unpin" : "Pin"}</button>`}
@@ -842,6 +855,7 @@ function openResult(i, detail = false) {
 }
 function openApp(app) {
   if (pcOnly(app)) { toast(source.REASON.open); return; }
+  if (openMode(app) === "inside") { openInside(app); return; }
   window.open(app.url, "_blank", "noopener");
   recordRecent(app.id);
 }
@@ -1074,6 +1088,9 @@ function bind() {
     const openLink = e.target.closest("a[data-open]");
     if (openLink && !e.defaultPrevented) {
       if (S.longPressed) { e.preventDefault(); S.longPressed = false; return; }
+      const app = S.byId[openLink.dataset.open];
+      const plain = e.button === 0 && !(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey);
+      if (app && plain && openMode(app) === "inside") { e.preventDefault(); openInside(app); return; }
       recordRecent(openLink.dataset.open);
       return;
     }
@@ -1083,6 +1100,7 @@ function bind() {
     if (d && !e.target.closest("a, button")) appPanel(d.dataset.detail);
   });
   document.addEventListener("keydown", (e) => {
+    if (host.isOpen()) { if (host.keydown(e)) e.preventDefault(); return; } // the app layer owns the keys
     if (S.route === "reels" && !S.q && reels.keydown(e)) { e.preventDefault(); return; }
     const typing = e.target.matches("input, textarea, select");
     if (e.key === "Escape") {

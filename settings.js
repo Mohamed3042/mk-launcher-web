@@ -14,9 +14,10 @@ const UPDATE_WORDS = {
 };
 
 export function createSettings(d, reels) {
-  const { $, esc, g, api, post, toast, ago, theme, setTheme, phonePanel } = d;
+  const { $, esc, g, api, post, toast, ago, theme, setTheme, phonePanel, inside } = d;
   const device = devicePrefs(globalThis.localStorage);
-  const S = { reels: null, health: null, voices: [], busy: false };
+  const S = { reels: null, health: null, voices: [], busy: false, insideApps: [] };
+  const insideOn = () => { const v = inside?.get(); return typeof v === "boolean" ? v : !!inside?.phone(); };
 
   const shared = () => S.reels?.settings || reels.data?.settings || null;
   const scope = (where) => `<span class="scope">${g(where === "device" ? "phone" : "refresh")}${where === "device" ? "This device" : "All your devices"}</span>`;
@@ -89,6 +90,8 @@ export function createSettings(d, reels) {
       <section class="section"><div class="section-head"><h2>Reels</h2></div>${reelsCard}</section>
       <section class="section"><div class="section-head"><h2>Appearance</h2></div><div class="set-card">
         ${row("Theme", "Auto follows your device.", `<div class="seg" role="group" aria-label="Theme">${themeSeg}</div>`, "device", " wrap")}</div></section>
+      ${source.BACKUP || !inside ? "" : `<section class="section"><div class="section-head"><h2>Apps</h2></div><div class="set-card">
+        ${row("Open apps inside the Launcher", `Full screen, no browser bars, with a Back to Launcher button you can drag to any corner. Only apps that allow it${S.insideApps.length ? ` (${esc(S.insideApps.join(", "))})` : ""}; the rest open in the browser.`, sw("set-inside", insideOn(), "Open apps inside the Launcher"), "device")}</div></section>`}
       <section class="section"><div class="section-head"><h2>Backup on GitHub</h2></div>${backupCard}</section>
       ${source.BACKUP ? "" : `<section class="section"><div class="section-head"><h2>Updates</h2></div><div class="set-card pad">${updates}</div></section>`}
       <section class="section"><div class="section-head"><h2>About</h2></div><div class="set-card">
@@ -132,6 +135,7 @@ export function createSettings(d, reels) {
     const [r, h, a] = await Promise.allSettled([api("/api/reels"), api("/api/health"), api("/api/apps")]);
     if (r.status === "fulfilled") { S.reels = r.value; reels.data = r.value; }
     if (h.status === "fulfilled") S.health = h.value;
+    if (a.status === "fulfilled") S.insideApps = (a.value.apps || []).filter((x) => x.open === "inside").map((x) => x.name);
     if (a.status === "fulfilled") { S.selfRepo = a.value.self_repo || ""; S.owner = "Mohamed3042"; S.liveOrigin = a.value.public_origin || ""; }
     S.snapAt = source.BACKUP ? source.snapshotAt() : 0;
     paint();
@@ -199,6 +203,13 @@ export function createSettings(d, reels) {
           toast("Reels start from the top again");
         } catch (e) { toast(e.message); }
         paint();
+        break;
+      }
+      case "set-inside": {
+        if (!inside.set(!insideOn())) toast("This browser won't save settings (private mode?)");
+        else toast(insideOn() ? "Apps open inside the Launcher on this device" : "Apps open in the browser on this device");
+        paint();
+        $('[data-act="set-inside"]')?.focus();
         break;
       }
       case "set-theme": setTheme(el.dataset.v); paint(); $(`[data-act="set-theme"][data-v="${el.dataset.v}"]`)?.focus(); break;
