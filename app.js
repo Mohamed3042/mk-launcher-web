@@ -12,6 +12,8 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const g = (name, cls = "") => `<svg class="g ${cls}" viewBox="0 0 24 24" aria-hidden="true">${GLYPHS[name] || GLYPHS.grid}</svg>`;
 const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s7)", "var(--s8)", "var(--s6)"];
+// iPhone home-screen app: app.css keeps the page 1 px taller than the window so iOS gives it the whole screen.
+if ("standalone" in navigator && navigator.standalone === true) document.documentElement.classList.add("ios-app");
 const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "settings", "connect"];
 const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", settings: "Settings", connect: "Connect" };
 const NAV = [ // desktop sidebar

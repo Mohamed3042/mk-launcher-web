@@ -798,7 +798,11 @@ svg.chart .cross { stroke: var(--ink-3); stroke-width: 1; }
 .caught-body .link-btn { margin-top: 6px; color: #f3c27a; }
 .reel.loading .reel-media { background: linear-gradient(90deg, #15120f, #211c17, #15120f); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 
-html.route-reels body { overflow: hidden; }
+html.route-reels body { overscroll-behavior: none; }
+/* An iPhone home-screen app (black-translucent) gets the whole screen only while the page is taller than its
+   window; a page that fits (Reels) loses the status bar's height at the bottom and must not lock its scrolling
+   (MK Cinema on the owner's iPhone, 2026-10-24). app.js sets .ios-app once; never toggled. */
+html.ios-app body { min-height: calc(100lvh + 1px); }
 html.route-reels .topbar { display: none; }
 html.route-reels main#view { padding: 0; }
 
