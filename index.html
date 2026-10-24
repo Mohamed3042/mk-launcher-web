@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="mkl-mode" content="backup">
+  <meta name="mkl-snapshot" content="Mohamed3042/mk-launcher-snapshot">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self'; manifest-src 'self'; worker-src 'self'; media-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MK Launcher Backup</title>
+  <meta name="description" content="All of Mohamed's apps, sites, repos and PC in one place.">
+  <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f2f0ec" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Backup">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/backup.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/backup-apple-touch-icon.png">
+  <link rel="preload" href="fonts/dm-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/cormorant-garamond-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="app.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <!--
+  THESIS: the lit control room of one person's work. The app he is in lights the room; everything else waits in quiet glass. Refuses the admin dashboard: navy panels, blue accents, developer changelogs.
+  OWN-WORLD: near-black warm ink; ambient light from the featured app's own colour; frosted glass with hairline edges; white pills for the one action; amber for links and focus; Cormorant Garamond wordmark, DM Sans UI; glossy squircle app icons.
+  STORY: he sees what runs, opens or starts it in one tap, and reads what changed as plain sentences with the changed screen area ringed.
+  FIRST VIEWPORT: serif wordmark and white-pill nav left; full-width glass search; "Home", the lit Start-here card with a white Open pill, big pinned icons, stopped apps with Start pills; the What-changed glass panel fills the right column.
+  FORM: Liquid Glass, owner-picked from three Codex concept boards on 2026-10-24 (sibling of MK Cinema); seed waived because the owner pinned the direction.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <div class="app" id="app"></div>
+  <div id="panel" class="panel" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p style="padding:24px">MK Launcher needs JavaScript.</p></noscript>
+</body>
+</html>

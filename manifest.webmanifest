@@ -1,0 +1,39 @@
+{
+  "name": "MK Launcher Backup",
+  "short_name": "Backup",
+  "description": "The launcher when the PC is offline: the last known state of every app, site and change.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0a0b",
+  "theme_color": "#0a0a0b",
+  "icons": [
+    {
+      "src": "icons/backup-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/backup-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/backup-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Reels",
+      "url": "./#/reels"
+    },
+    {
+      "name": "Changes",
+      "url": "./#/changes"
+    }
+  ]
+}

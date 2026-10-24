@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="mkl-mode" content="backup">
+  <meta name="mkl-snapshot" content="Mohamed3042/mk-launcher-snapshot">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; connect-src 'self' https:; font-src 'self'; manifest-src 'self'; worker-src 'self'; media-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MK News · Backup</title>
+  <meta name="description" content="Mohamed's AI news: what changed and what it means for his own apps.">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b0908">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MK News">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" href="../icons/news.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../icons/news-apple-touch-icon.png">
+  <link rel="preload" href="../fonts/dm-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../fonts/dm-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../fonts/cormorant-garamond-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="news.css">
+  <script type="module" src="news.js"></script>
+</head>
+<body data-view="home">
+  <a class="skip" href="#view">Skip to the stories</a>
+  <div class="light" id="light" aria-hidden="true"><canvas width="48" height="27"></canvas></div>
+  <header class="bar" id="bar"><span class="wordmark">MK News</span></header>
+  <div class="masthead">
+    <nav class="chips" id="chips" aria-label="Topics"></nav>
+    <p class="edition" id="edition" aria-live="polite"></p>
+  </div>
+  <main id="view" tabindex="-1"></main>
+  <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
+  <div class="sheet" id="sheet" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <noscript><p style="padding:24px;color:#f7f2ea">MK News needs JavaScript.</p></noscript>
+</body>
+</html>
