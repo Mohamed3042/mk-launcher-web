@@ -609,7 +609,7 @@ function appPanel(id) {
   const repo = repoFor(app);
   const shots = S.shots.latest[id] || {};
   const group = S.groups.find((x) => x.id === app.group)?.name;
-  const statusLine = app.type === "page" ? "Claude page" : [statusWord(app), st?.ms != null && st.state === "up" ? `${st.ms} ms` : null, st?.since ? `since ${ago(st.since)}`.replace(" ago", "") : null].filter(Boolean).join(" · ");
+  const statusLine = app.type === "page" ? "Claude page" : [statusWord(app), st?.ms != null && st.state === "up" ? `${st.ms} ms` : null, !BACKUP && st?.since ? `since ${ago(st.since)}`.replace(" ago", "") : null].filter(Boolean).join(" · ");
   let body = `<div class="btns">
     ${openLink(app, "btn primary", `${g("external")}Open`)}
     ${startButton(app, false)}
@@ -1221,9 +1221,9 @@ views.connect = function connectView() {
         <button class="btn ${cinema ? "" : "primary "}wide" type="submit"${S.connecting ? " disabled" : ""}>${S.connecting ? "Checking…" : e ? "Try again" : "Connect"}</button>
       </form>
       <section class="connect-steps" aria-label="How to make the key"><h2>Make the key</h2><ol>
-        <li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">New fine-grained token ${g("external")}</a></li>
-        <li>Repository access: <b>Only select repositories</b>, then <b>${esc(source.REPO_NAME)}</b></li>
-        <li>Permissions, Contents: <b>Read-only</b>. Generate it, copy it, paste it above.</li></ol></section>
+        <li><span><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">New fine-grained token ${g("external")}</a></span></li>
+        <li><span>Repository access: <b>Only select repositories</b>, then pick <b class="nowrap">${esc(source.REPO_NAME)}</b></span></li>
+        <li><span>Permissions, Contents: <b>Read-only</b>. Generate it, copy it, paste it above.</span></li></ol></section>
     </div></section>`;
 };
 
