@@ -20,6 +20,7 @@ export const REASON = {
   settings: "Shared choices are saved on your PC. Change them when it's back.",
   news: "Checking for new stories needs your PC.",
   invite: "Inviting needs your PC.",
+  cinema: "Changing the portfolio needs your PC, and it's offline.",
   default: "This needs your PC, and it's offline.",
 };
 
@@ -135,6 +136,7 @@ export function validateSnapshot(data) {
     reels: { ...reels, items: arr(reels.items).filter(linkOk), seen: arr(reels.seen), settings: obj(reels.settings), topics: arr(reels.topics) },
     news: news && { ...news, feed: arr(news.feed).filter(linkOk), repos: Object.fromEntries(Object.entries(obj(news.repos)).map(([k, v]) => [k, arr(v).filter(linkOk)])) },
     saved: arr(data.saved),
+    cinema: obj(data.cinema).films ? { ...obj(data.cinema), films: arr(data.cinema.films).filter((f) => f && typeof f.id === "string" && typeof f.title === "string") } : null,
   };
 }
 
@@ -184,6 +186,9 @@ export function backupRead(snap, path, local = {}) {
     case "/api/news/status": if (!news) throw new NeedsPc("news"); return { ...(news.status || {}), refreshing: false };
     case "/api/news/repos": if (!news) throw new NeedsPc("news"); return { items: (news.repos?.[q.list || "today"] || []).slice(0, Number(q.limit || 25)) };
     case "/api/news/invites": throw new NeedsPc("invite");
+    case "/api/cinema": if (!snap.cinema) throw new NeedsPc("cinema"); return snap.cinema;
+    case "/api/cinema/job": return { kind: null, running: false, done: true };
+    case "/api/cinema/film": case "/api/cinema/thumb": case "/api/cinema/poster": case "/api/cinema/video": throw new NeedsPc("cinema");
     case "/api/pc": case "/api/files": case "/api/files/raw": throw new NeedsPc("pc");
     case "/api/history": throw new NeedsPc("health");
     case "/api/github/stats": throw new NeedsPc("stats");
@@ -194,7 +199,8 @@ export function backupRead(snap, path, local = {}) {
 // POST: only this device's own marks work without the PC; everything else says why it can't.
 const WRITE_REASON = { "/api/start": "start", "/api/pins": "pins", "/api/pc/open": "pc", "/api/files/open": "pc",
   "/api/github/refresh": "refresh", "/api/shots/snap": "snap", "/api/news/save": "save", "/api/news/unsave": "save",
-  "/api/news/refresh": "news", "/api/settings": "settings", "/api/news/invites": "invite", "/api/news/invites/remove": "invite" };
+  "/api/news/refresh": "news", "/api/settings": "settings", "/api/news/invites": "invite", "/api/news/invites/remove": "invite",
+  "/api/cinema/rank": "cinema", "/api/cinema/publish": "cinema" };
 export function backupWrite(path, body, local) {
   const { route } = query(path);
   if (route === "/api/reels/seen") {

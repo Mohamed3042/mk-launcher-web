@@ -1,0 +1,199 @@
+/* Cinema: films ranked by the score of their best cuts, what the portfolio shows now, a film's backlog sheet. Tokens from app.css. */
+.cin { max-width: 1400px; }
+.cin-jobslot:empty { display: none; }
+
+/* phone: what is live first, then the films, then the built-in worlds; desktop: films left, live and worlds right */
+.cin-cols { display: flex; flex-direction: column; }
+.cin-side { display: contents; }
+.cin-live-sec { order: 0; margin-top: 8px; }
+.cin-main { order: 1; }
+.cin-worlds { order: 2; }
+@media (min-width: 1100px) {
+  .cin-cols { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); column-gap: 32px; align-items: start; }
+  .cin-main { order: 0; }
+  .cin-side { display: block; position: sticky; top: 16px; }
+  .cin-live-sec { margin-top: 8px; }
+}
+
+/* a job, wherever you are on the page */
+.cin-job {
+  display: flex; align-items: center; gap: 12px; margin: 8px 0 6px; padding: 12px 14px; border-radius: 16px;
+  background: var(--panel); border: 1px solid var(--line-strong); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+}
+.cin-job.ok { border-color: color-mix(in srgb, var(--up) 45%, var(--line)); background: color-mix(in srgb, var(--up) 9%, var(--panel)); }
+.cin-job.bad { border-color: color-mix(in srgb, var(--down) 45%, var(--line)); background: color-mix(in srgb, var(--down) 9%, var(--panel)); }
+.cin-job .st i { width: 12px; height: 12px; }
+.cin-job-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.cin-job-text b { font-weight: 600; overflow-wrap: anywhere; }
+.cin-job-text span { color: var(--ink-2); font-size: 13px; overflow-wrap: anywhere; }
+
+/* posters */
+.cin-poster {
+  flex: none; position: relative; display: grid; place-items: center; width: 96px; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden;
+  background: var(--raised); border: 1px solid var(--line); color: var(--ink-3);
+}
+.cin-poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.cin-poster svg.g { width: 22px; height: 22px; }
+.cin-poster.lg { width: 76px; }
+.cin-head h2 { font-size: 18px; line-height: 1.25; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.cin-head .about { margin-top: 2px; font-size: 13px; }
+.cin-poster.world {
+  border-color: transparent; color: #fff;
+  background: linear-gradient(162deg, color-mix(in srgb, var(--c, #8a5a2b) 62%, #fff), var(--c, #8a5a2b) 46%, color-mix(in srgb, var(--c, #8a5a2b) 72%, #000));
+}
+.broken { visibility: hidden; }
+
+/* on the portfolio now: the featured film lights its own glass */
+.cin-live {
+  --c: #ffb340;
+  position: relative; overflow: hidden; isolation: isolate; display: grid; gap: 16px; padding: 18px; border-radius: var(--r-big);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 18%, var(--card-tint)), var(--card-tint) 70%);
+  border: 1px solid color-mix(in srgb, var(--c) 40%, rgb(255 255 255 / 0.1));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 26px 70px -34px color-mix(in srgb, var(--c) 80%, transparent);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+}
+.cin-live::before {
+  content: ""; position: absolute; inset: -60% -20% -60% -40%; z-index: -1;
+  background: radial-gradient(50% 60% at 16% 30%, color-mix(in srgb, var(--c) 26%, transparent), transparent 70%);
+}
+.cin-lead { display: grid; gap: 12px; }
+.cin-lead + .cin-lead { padding-top: 16px; border-top: 1px solid var(--line); }
+.cin-lead.tap { cursor: pointer; }
+.cin-lead.tap:hover h3 { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 4px; }
+.cin-lead-top { display: flex; align-items: center; gap: 14px; }
+.cin-live .cin-poster { width: 116px; border-radius: 12px; }
+.cin-lead-text { min-width: 0; display: grid; gap: 4px; }
+.cin-lead h3 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15; overflow-wrap: anywhere; }
+.cin-sub { margin: 0; color: var(--ink-3); font-size: 13px; }
+.cin-tag {
+  justify-self: start; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--ink-2);
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.cin-thumbs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.cin-thumbs::-webkit-scrollbar { display: none; }
+.cin-thumb-s { flex: none; width: 76px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); }
+.cin-pending { display: flex; gap: 8px; align-items: flex-start; margin: 0; color: var(--ink-2); font-size: 13px; }
+.cin-pending svg.g { width: 16px; height: 16px; margin-top: 1px; color: var(--starting); }
+.cin-live-foot { display: flex; align-items: center; gap: 10px; }
+
+/* the film list */
+.cin-tools { margin: 0 0 10px; }
+.cin-chips { margin-bottom: 14px; }
+.cin-row { min-height: 78px; }
+.cin-row .name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+.cin-row .sub { margin-top: 2px; }
+.cin-row .st { font-size: 12px; margin-bottom: 2px; }
+.cin-world { cursor: default; }
+.cin-world .name, .cin-world .sub { white-space: normal; }
+.cin-world .cin-poster { width: 72px; }
+.cin-world .end { display: flex; align-items: center; }
+
+/* the score: a number and a bar, 0 to 100 */
+.cin-meter { flex: none; display: grid; justify-items: end; gap: 5px; min-width: 44px; text-align: right; }
+.cin-meter b { font-size: 16px; font-weight: 600; line-height: 1; }
+.cin-meter i { display: block; width: 44px; height: 4px; border-radius: 99px; background: var(--hover); overflow: hidden; }
+.cin-meter s { display: block; height: 100%; border-radius: inherit; background: var(--ink); text-decoration: none; opacity: 0.9; }
+.cin-meter em { font-style: normal; font-size: 11px; line-height: 1.1; color: var(--ink-3); }
+.cin-meter.none b { color: var(--ink-3); font-weight: 400; }
+.cin-meter.sm i { width: 36px; height: 3px; }
+.cin-meter.sm b { font-size: 14px; }
+
+/* a film's sheet */
+.cin-sheet { --padx: 18px; padding-bottom: 0; }
+.cin-lang { margin: 6px 0 2px; }
+.cin-lang .count { margin-left: 2px; opacity: 0.6; font-size: 12px; }
+.cin-sheet .note { margin-top: 14px; }
+.cin-sheet .section:first-child { margin-top: 18px; }
+.cin-player { position: sticky; top: -4px; z-index: 4; margin-top: 10px; padding: 12px 0 8px; background: var(--float); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3); } /* -4px: the panel body's own padding */
+.cin-player[hidden] { display: none; }
+.cin-player video { display: block; width: 100%; max-height: 34dvh; border-radius: 14px; background: #000; object-fit: contain; }
+.cin-player-bar { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+.cin-player-t { flex: 1; min-width: 0; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cin-player-bar .icon-btn[aria-pressed="false"] { color: var(--ink-3); } /* sound off */
+
+/* the backlog: what each part is about, and how good it is */
+.cin-chapters { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; }
+.cin-ch { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 14px; border-top: 1px solid var(--line); }
+.cin-ch:first-child { border-top: 0; }
+.cin-ch[role="button"] { cursor: pointer; transition: background 120ms var(--ease); }
+.cin-ch[role="button"]:hover { background: var(--hover); }
+.cin-no { flex: none; width: 20px; color: var(--ink-3); font-size: 12px; }
+.cin-ch-t { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.cin-ch-time { flex: none; color: var(--ink-3); font-size: 12px; }
+
+/* the ranked cuts */
+.cin-hint { margin: -4px 0 12px; color: var(--ink-3); font-size: 13px; }
+.cin-cuts { display: grid; gap: 10px; }
+.cin-cut {
+  display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 10px; border-radius: var(--r-panel);
+  background: var(--panel); border: 1px solid var(--line); transition: background 150ms var(--ease), border-color 150ms var(--ease);
+}
+.cin-cut.playing { border-color: var(--line-strong); }
+.cin-cut[data-on="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.cin-pic { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--raised); }
+.cin-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cin-play { position: absolute; inset: 0; display: grid; place-items: center; padding: 0; border: 0; background: none; color: #fff; cursor: pointer; }
+.cin-play svg.g { width: 30px; height: 30px; padding: 8px 7px 8px 9px; border-radius: 50%; background: rgb(10 10 11 / 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); fill: currentColor; stroke-width: 1.5; }
+.cin-play:hover svg.g { background: rgb(10 10 11 / 0.75); }
+.cin-play[disabled] { cursor: default; opacity: 0.5; }
+.cin-time { position: absolute; right: 5px; bottom: 4px; padding: 1px 5px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #fff; background: rgb(10 10 11 / 0.6); pointer-events: none; }
+.cin-tick { position: absolute; top: 0; left: 0; z-index: 2; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.cin-tick::before {
+  content: ""; width: 22px; height: 22px; border-radius: 7px; border: 1.75px solid rgb(255 255 255 / 0.85); background: rgb(10 10 11 / 0.5);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background 150ms var(--ease), border-color 150ms var(--ease);
+}
+.cin-tick svg.g { position: absolute; width: 15px; height: 15px; stroke-width: 3; color: var(--pill-ink); opacity: 0; transition: opacity 120ms var(--ease); }
+.cin-tick[aria-checked="true"]::before { background: var(--pill); border-color: var(--pill); }
+.cin-tick[aria-checked="true"] svg.g { opacity: 1; }
+.cin-cut-main { min-width: 0; display: grid; gap: 4px; }
+.cin-label { display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+.cin-label-text { flex: 0 1 auto; min-width: 0; padding-top: 2px; font-size: 15px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.cin-edit { flex: none; width: 44px; height: 44px; margin: -10px -8px -10px -2px; color: var(--ink-3); }
+.cin-edit svg.g { width: 15px; height: 15px; }
+.cin-rename {
+  flex: 1; min-width: 0; height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: var(--raised); color: var(--ink); font: 600 15px var(--font); outline: none;
+}
+.cin-cut-meta { color: var(--ink-3); font-size: 12px; }
+.cin-why { display: flex; flex-wrap: wrap; gap: 5px; }
+.cin-why .pill { height: 22px; padding: 0 8px; font-size: 11px; }
+
+/* the public name and one line of a film on the home */
+.cin-fields { display: grid; gap: 12px; }
+.cin-field { display: grid; gap: 6px; }
+.cin-field > span { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.cin-input {
+  width: 100%; min-width: 0; height: 48px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--raised);
+  color: var(--ink); font: 400 16px var(--font); outline: none; transition: border-color 150ms var(--ease);
+}
+.cin-input::placeholder { color: var(--ink-3); }
+.cin-input:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.cin-clash { margin-top: 10px; }
+.cin-clash:empty { display: none; }
+
+/* the action bar stays in thumb reach while the cuts scroll */
+.cin-bar {
+  position: sticky; bottom: 0; z-index: 4; margin: 18px calc(var(--padx) * -1) 0; padding: 12px var(--padx) calc(var(--safe-b) + 14px);
+  background: var(--float); border-top: 1px solid var(--line); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3);
+}
+.cin-bar-slot { display: grid; gap: 8px; }
+.cin-bar .btn.wide { height: 48px; }
+.cin-bar-note { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--ink-3); font-size: 12.5px; line-height: 1.4; }
+.cin-bar-note svg.g { flex: none; width: 14px; height: 14px; margin-top: 1px; color: var(--accent); }
+.cin-bar-note.ok { color: var(--up); }
+.cin-bar-note.bad { color: var(--down); }
+.cin-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.cin-steps .st { display: flex; font-size: 14px; color: var(--ink); }
+.cin-steps .st:not(.up):not(.starting):not(.down) { color: var(--ink-3); }
+
+@media (min-width: 760px) {
+  .cin-sheet { --padx: 24px; }
+  .cin-row { min-height: 84px; }
+  .cin-poster { width: 112px; }
+  .cin-poster.lg { width: 96px; }
+  .cin-cut { grid-template-columns: 148px minmax(0, 1fr) auto; }
+  .cin-world .cin-poster { width: 80px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .cin-live, .cin-job, .cin-player, .cin-bar { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

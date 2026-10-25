@@ -3,6 +3,7 @@ import { GLYPHS } from "./glyphs.js";
 import * as C from "./charts.js";
 import { createReels } from "./reels.js";
 import { createSettings } from "./settings.js";
+import { createCinema } from "./cinema.js";
 import * as source from "./source.js";
 import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
@@ -16,11 +17,11 @@ const g = (name, cls = "") => `<svg class="g ${cls}" viewBox="0 0 24 24" aria-hi
 const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s7)", "var(--s8)", "var(--s6)"];
 // iPhone home-screen app: app.css keeps the page 1 px taller than the window so iOS gives it the whole screen.
 if ("standalone" in navigator && navigator.standalone === true) document.documentElement.classList.add("ios-app");
-const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "settings", "connect"];
-const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", settings: "Settings", connect: "Connect" };
+const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "cinema", "settings", "connect"];
+const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", cinema: "Cinema", settings: "Settings", connect: "Connect" };
 const NAV = [ // desktop sidebar
   ["home", "Home", "home"], ["apps", "Apps", "apps"], ["reels", "Reels", "reels"], ["changes", "Changes", "changes"],
-  ["github", "GitHub", "github"], ["pc", "PC", "pc"], ["settings", "Settings", "settings"],
+  ["github", "GitHub", "github"], ["pc", "PC", "pc"], ["cinema", "Cinema", "film"], ["settings", "Settings", "settings"],
 ];
 const TABS = [ // phone tab bar: five at most; GitHub and PC sit in "More places" on Home
   ["home", "Home", "home"], ["reels", "Reels", "reels"], ["apps", "Apps", "apps"], ["changes", "Changes", "changes"],
@@ -188,7 +189,9 @@ const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () =>
   setTheme: (v) => { localSet("theme", v); applyTheme(); },
   inside: { phone: isPhone, get: () => HR.readPref(globalThis.localStorage), set: (on) => HR.writePref(globalThis.localStorage, on) } }, reels);
 const host = createHost({ esc, g, toast });
-const MORE = [["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["news/", "MK News", "news"]];
+const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP,
+  redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
+const MORE = [["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
 const views = {
   home() {
     const pins = S.pins.map((id) => S.byId[id]).filter(Boolean);
@@ -275,6 +278,11 @@ const views = {
   settings() {
     S.after.push(() => settings.mount());
     return settings.render();
+  },
+
+  cinema() {
+    S.after.push(() => cinema.mount());
+    return cinema.render();
   },
 
   pc() {
@@ -954,6 +962,7 @@ async function act(name, el) {
     default:
       if (name.startsWith("reel-")) reels.act(name, el);
       else if (name.startsWith("set-")) settings.act(name, el);
+      else if (name.startsWith("cin-")) cinema.act(name, el);
       break;
   }
 }
@@ -999,6 +1008,7 @@ function render() {
   document.documentElement.classList.toggle("route-connect", S.route === "connect");
   const head = S.q || S.route === "home" || S.route === "reels" || S.route === "connect" ? "" : `<h1 class="page-title">${esc(TITLES[S.route])}</h1>`;
   if (S.q || S.route !== "reels") reels.unmount();
+  if (S.q || S.route !== "cinema") cinema.unmount();
   C.hideTip(); // the charts it pointed at are about to be replaced
   view.innerHTML = S.q ? searchView() : head + views[S.route]();
   runAfter();
@@ -1052,7 +1062,7 @@ function schedulePoll(ms) {
       if (before !== after) {
         renderShell();
         // Reels and Settings show no app status: never redraw them under his thumb
-        if (!S.q && !["reels", "settings"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
+        if (!S.q && !["reels", "settings", "cinema"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
         if (S.panelApp) refreshPanelStatus();
       }
     }
