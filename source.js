@@ -3,7 +3,10 @@
 // Backup (the GitHub Pages copy): the last snapshot the PC pushed to a private repo, read with a
 // read-only token pasted once on this device. The token lives in localStorage and is sent only in
 // the Authorization header to api.github.com; it never goes into a URL, a cache key or a log.
+// Guests (MK News on the Pages copy, opened from his invite link): news.json from the news-only repo,
+// read with the guest's own key, kept the same way.
 import * as R from "./backup-rules.js";
+import * as I from "./news/invite.js";
 
 const meta = (n) => globalThis.document?.querySelector(`meta[name="${n}"]`)?.content || "";
 export const MODE = R.chooseMode(meta("mkl-mode"));
@@ -11,7 +14,8 @@ export const BACKUP = MODE === "backup";
 export const { REASON, NeedsPc, needsPc, bannerText, whenWords, clock, BACKUP_URL } = R;
 const REPO = meta("mkl-snapshot") || `Mohamed3042/${R.SNAPSHOT_REPO}`;
 export const REPO_NAME = REPO.split("/").pop();
-const CONTENTS = `https://api.github.com/repos/${REPO}/contents/`;
+const NEWS = `${I.REPO_OWNER}/${R.NEWS_REPO}`;
+const contents = (repo) => `https://api.github.com/repos/${repo}/contents/`;
 const DATA_CACHE = "mkl-backup-data-v1";
 const SHOT_CACHE = "mkl-backup-shots-v1";
 const K = { token: "mkl.token", from: "mkl.tokenFrom", etag: "mkl.backup.etag", local: "mkl.backup.local", cinema: "mkc.token" };
@@ -47,7 +51,7 @@ export async function forget() {
   try { await Promise.all([caches.delete(DATA_CACHE), caches.delete(SHOT_CACHE)]); } catch { /* no Cache Storage */ }
 }
 
-async function gh(path, { tok = token(), etag } = {}) {
+async function gh(path, { tok = token(), etag, repo = REPO } = {}) {
   if (globalThis.navigator?.onLine === false) throw new SourceError("offline");
   const t = R.cleanToken(tok);
   if (!t) throw new SourceError("token");
@@ -55,7 +59,7 @@ async function gh(path, { tok = token(), etag } = {}) {
   if (etag) headers["If-None-Match"] = etag;
   let res;
   try {
-    res = await fetch(CONTENTS + path.split("/").map(encodeURIComponent).join("/"),
+    res = await fetch(contents(repo) + path.split("/").map(encodeURIComponent).join("/"),
       { headers, cache: "no-store", credentials: "omit", redirect: "error", referrerPolicy: "no-referrer" });
   } catch { throw new SourceError(globalThis.navigator?.onLine === false ? "offline" : "github-unreachable"); }
   if (res.status === 304) return null;
@@ -163,6 +167,89 @@ export async function backupApi(path, opts = {}) {
   const data = R.backupRead(snap, path, readLocal());
   const route = path.split("?")[0];
   return route.startsWith("/api/shots") ? withPictures(route, data) : data;
+}
+
+// ---------- guests: MK News from his invite link ----------
+// The guest's key sits under its own name (never the owner's mkl.token), and memory holds it too, so an invite
+// still works for this visit when the browser blocks storage.
+const GUEST_CACHE = "mkn-guest-data-v1";
+const GK = { etag: "mkn.guest.etag", local: "mkn.guest.local" };
+// What this device may hold of the owner's own MK News (why lines, his work): gone before a guest's news shows.
+const OWNER_COPIES = ["mkn.feed", "mkn.feedAt", "mkn.charts", "mkn.status", "mkl.reels.cache"];
+const G = { doc: null, pending: null, token: "", guest: null };
+const storage = () => { try { return globalThis.localStorage; } catch { return null; } };
+export const guest = () => I.readGuest(storage()) || G.guest;
+export const guestToken = () => R.cleanToken(ls.get(I.TOKEN_KEY)) || G.token;
+export const isGuest = () => { const gu = guest(); return BACKUP && !!gu && !gu.left && !!guestToken(); };
+export const newsAt = () => G.doc?.at || 0;
+
+async function dropGuestData() {
+  ls.del(GK.etag); ls.del(GK.local);
+  for (const k of OWNER_COPIES) ls.del(k);
+  G.doc = null;
+  try { await caches.delete(GUEST_CACHE); } catch { /* no Cache Storage */ }
+}
+// Opening an invite: this device now reads the guest's news. The owner's own backup key, if he switches his
+// device to the invite, is forgotten here (MK Cinema's own key is left alone).
+export async function becomeGuest({ name, token: key }) {
+  await forget();
+  await dropGuestData();
+  G.token = R.cleanToken(key);
+  G.guest = { name, left: false };
+  ls.set(I.TOKEN_KEY, G.token);
+  I.writeGuest(storage(), G.guest);
+}
+export async function leaveGuest() {
+  const name = guest()?.name || "Guest";
+  ls.del(I.TOKEN_KEY);
+  G.token = "";
+  await dropGuestData();
+  G.guest = { name, left: true };
+  I.writeGuest(storage(), G.guest);
+}
+
+async function readCachedNews() {
+  try {
+    const c = await caches.open(GUEST_CACHE);
+    const hit = await c.match(here("./_guest/news.json"));
+    return hit ? R.validateNews(await hit.json()) : null;
+  } catch { return null; }
+}
+export async function cachedNews() {
+  if (!G.doc) G.doc = await readCachedNews();
+  return G.doc;
+}
+// Fresh from GitHub when it changed (ETag), else the copy on this device. One request at a time.
+export function fetchNews() {
+  if (G.pending) return G.pending;
+  G.pending = (async () => {
+    const res = await gh("news.json", { repo: NEWS, tok: guestToken(), etag: G.doc || (await cachedNews()) ? ls.get(GK.etag) : null });
+    if (!res) return G.doc;
+    let data;
+    try { data = R.validateNews(await res.json()); } catch { throw new SourceError("invalid"); }
+    G.doc = data;
+    const etag = res.headers.get("etag");
+    if (etag) ls.set(GK.etag, etag);
+    try {
+      const c = await caches.open(GUEST_CACHE);
+      await c.put(here("./_guest/news.json"), new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } }));
+    } catch { /* storage full or blocked: it still works for this visit */ }
+    return data;
+  })().finally(() => { G.pending = null; });
+  return G.pending;
+}
+// MK News' API, answered from news.json for a guest; their seen reels and Reels choices stay on this device.
+export async function guestApi(path, opts = {}) {
+  const doc = (await cachedNews()) || (await fetchNews());
+  if (!doc) throw new SourceError("no-snapshot");
+  let local = {};
+  try { local = JSON.parse(ls.get(GK.local) || "{}") || {}; } catch { /* a fresh start */ }
+  if (String(opts.method || "GET").toUpperCase() === "GET") return R.guestRead(doc, path, local);
+  let body = {};
+  try { body = JSON.parse(opts.body || "{}"); } catch { /* none */ }
+  const out = R.guestWrite(doc, path, body, local);
+  ls.set(GK.local, JSON.stringify(local));
+  return out;
 }
 
 // Is the live launcher answering again? A no-cors request only tells "reachable or not", which is all we need.

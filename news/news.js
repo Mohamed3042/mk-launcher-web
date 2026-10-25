@@ -3,6 +3,8 @@
 // charts and repo lists, Reels plays the stories and real clips full screen, and Settings holds his choices and
 // Saved (what was sent to Claude). Reels and Settings are the launcher's own modules (../reels.js, ../settings.js):
 // one code path and the same shared choices on every device. Every story shows a real picture where one exists.
+// Guests (his invite link, on the GitHub Pages copy) read the same pages from news.json with a key of their own:
+// no Save, no launcher, no PC, a calm screen when a link is broken or has ended (guests.js draws those).
 import { icon } from "./icons.js";
 import { createAmbient } from "./ambient.js";
 import { mountRows, page, syncInk } from "./rows.js";
@@ -11,7 +13,16 @@ import * as source from "../source.js";
 import { GLYPHS } from "../glyphs.js";
 import { createReels } from "../reels.js";
 import { createSettings } from "../settings.js";
+import * as invite from "./invite.js";
+import { createGuests, standalone } from "./guests.js";
 import { thumbOf, setMyWork, TOPICS, TOPIC, KIND_LABEL, PROVIDER, CARD_HOSTS, toMs, ago, hoursAgo, byNewest, compact, money, cleanModel, plural, lowerFirst, minutes, prettyRepo, releaseChanges, releaseHighlight, releaseTitle, incidentOpen, firstSentence, cleanSummary, sourceLabel, artName, artUrl, artCss, pictureOf, view, metaExtra, promptFor, claudeUrl, priceDrops, flagshipPrices } from "./story.js";
+
+// An invite link carries a guest's key in the fragment (#invite=…): it is read and removed from the address first,
+// before anything else can see or store it. Only the GitHub Pages copy has guests; the PC's copy just drops it.
+const taken = invite.takeInvite();
+const arrival = source.BACKUP ? taken : null;
+const isGuest = () => source.isGuest();
+const ENDED = ["token", "access"]; // GitHub no longer takes the guest's key: revoked, expired or its repo access gone
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -19,7 +30,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 // Story links come from the feed (or this device's cached copy of it): only ever web addresses.
 const safeUrl = (u) => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "#");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-const ROUTES = ["home", "reels", "discover", "settings", "saved"];
+const ROUTES = ["home", "reels", "discover", "settings", "saved", "invite"];
 // The phone tab bar and the desktop tabs: Saved lives in Settings now, one tap away.
 const TABS = [["home", "Home", "#/home", "home"], ["reels", "Reels", "#/reels", "reels"], ["discover", "Topics", "#/discover", "topics"],
   ["settings", "Settings", "#/settings", "settings"]];
@@ -34,6 +45,7 @@ const S = {
   route: "home", sub: "stories", topic: "", query: "", provider: "", items: [], byId: new Map(), charts: null,
   status: null, saved: [], repos: {}, repoList: "today", repoPick: 0, offline: false, feedAt: 0, error: "",
   limit: PAGE, ask: null, askMode: "help", askIdea: "", after: [], synth: new Map(),
+  screen: "", screenCtx: {}, pending: null, checking: false, // a guest screen (welcome, ended…) instead of the pages
 };
 let ambient;
 const g = (name, cls = "") => `<svg class="g ${cls}" viewBox="0 0 24 24" aria-hidden="true">${GLYPHS[name] || GLYPHS.grid}</svg>`;
@@ -46,6 +58,12 @@ function localGet(k, d) { try { const v = localStorage.getItem("mkn." + k); retu
 function localSet(k, v) { try { localStorage.setItem("mkn." + k, JSON.stringify(v)); } catch { /* private mode or full */ } }
 
 async function api(path, opts = {}) {
+  if (isGuest()) {
+    try { return await source.guestApi(path, opts); } catch (e) {
+      if (ENDED.includes(e.code)) showScreen("ended");
+      throw Object.assign(new Error(e.message), { code: e.code, offline: ["offline", "github-unreachable", "no-snapshot"].includes(e.code) });
+    }
+  }
   if (source.BACKUP) {
     if (!source.token()) { const e = new Error("Connect the backup first."); e.offline = true; throw e; }
     if (!(await source.cachedSnapshot())) await source.fetchSnapshot();
@@ -139,6 +157,7 @@ function kicker(it, lead = "") {
 }
 const askBtn = (it, cls = "") => `<button class="pill white ${cls}" type="button" data-act="ask" data-id="${esc(it.id)}">${icon("sparkle")}<span>Ask Claude</span></button>`;
 function saveBtn(it, cls = "") {
+  if (isGuest()) return ""; // Saved is his list, kept on his PC
   const on = !!plainSaved(it.id);
   return `<button class="pill glass ${cls}" type="button" data-act="save" data-id="${esc(it.id)}" aria-pressed="${on}">${icon(on ? "bookmark-fill" : "bookmark")}<span>${on ? "Saved" : "Save"}</span></button>`;
 }
@@ -198,8 +217,9 @@ function pickHero() {
 function billboard(it) {
   const d = view(it);
   const line = d.why || d.line;
+  const t = thumbOf(it); // a designed title card (GitHub's preview) carries its own words: under a headline it is noise
   return `<section class="billboard" data-id="${esc(it.id)}" aria-labelledby="hero-title">
-    <div class="hero-art" aria-hidden="true"><img class="hero-img" src="${esc(thumbOf(it).kind === "photo" ? thumbOf(it).src : artUrl(artName(it)))}" data-art="${esc(artUrl(artName(it)))}" alt="" referrerpolicy="no-referrer"></div>
+    <div class="hero-art" aria-hidden="true"><img class="hero-img" src="${esc(t.kind === "photo" && !t.card ? t.src : artUrl(artName(it)))}" data-art="${esc(artUrl(artName(it)))}" alt="" referrerpolicy="no-referrer"></div>
     <div class="hero-copy">
       <p class="kicker">${kicker(it, "Top story")}</p>
       <h1 id="hero-title" dir="auto">${link(it, d.title)}</h1>
@@ -330,12 +350,16 @@ function homeView() {
       ${row("free", "Free & open", cards(free, { rowArt: "open" }))}
       ${row("latest", "Latest", cards(latest, { rowArt: "default" }), { see: "" })}
     </div>
-    <footer class="foot"><p>MK News reads public sources only: lab blogs, status pages, release notes, papers, Hacker News, GitHub and OpenRouter.</p><a href="../">${icon("back")}Back to the launcher</a></footer>`;
+    <footer class="foot"><p>MK News reads public sources only: lab blogs, status pages, release notes, papers, Hacker News, GitHub and OpenRouter.</p><a class="owner-only" href="../">${icon("back")}Back to the launcher</a></footer>`;
 }
 function emptyFeed() {
   const st = S.status;
   let head = "No news yet", body = "Tap Refresh; the first pull takes about a minute.";
-  if (S.offline) { head = "Can’t reach the PC"; body = "MK News keeps the last feed on this device once it has loaded. Try again when the PC is awake."; }
+  if (isGuest()) {
+    head = S.offline ? "No connection" : S.error ? "MK News can’t load the news" : "No news yet";
+    body = S.offline ? "MK News keeps the last edition on this device once it has loaded. Check your connection and try again."
+      : S.error ? "Try again in a while." : `${invite.OWNER}’s news fills in through the day. Check again soon.`;
+  } else if (S.offline) { head = "Can’t reach the PC"; body = "MK News keeps the last feed on this device once it has loaded. Try again when the PC is awake."; }
   else if (S.error) { head = "MK News can’t load the feed"; body = S.error; }
   else if (st?.refreshing) { head = "Pulling the latest news…"; body = "The first pull takes about a minute."; }
   return `<section class="empty lit" style="${artStyle("default")}"><div class="art" aria-hidden="true"></div>
@@ -557,8 +581,8 @@ function openAsk(it, trigger) {
   });
 }
 function paintAsk() {
-  const it = S.ask, d = view(it);
-  const prompt = promptFor(it, S.askMode, S.askIdea);
+  const it = S.ask, d = view(it), guest = isGuest();
+  const prompt = promptFor(it, S.askMode, S.askIdea, guest);
   $("#sheet").innerHTML = `<div class="scrim" data-act="close"></div>
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="ask-h">
       <div class="sheet-art" style="${artStyle(artName(it), 1)}" aria-hidden="true"><div class="art"></div></div>
@@ -571,20 +595,20 @@ function paintAsk() {
       </div>
       <div class="sheet-body">
         <div class="seg mode" role="group" aria-label="What do you want"><span class="ink" aria-hidden="true"></span>
-          <button type="button" data-act="ask-mode" data-v="help" aria-pressed="${S.askMode === "help"}">${icon("help")}Does this help me?</button>
+          <button type="button" data-act="ask-mode" data-v="help" aria-pressed="${S.askMode === "help"}">${icon("help")}${guest ? "Explain this" : "Does this help me?"}</button>
           <button type="button" data-act="ask-mode" data-v="idea" aria-pressed="${S.askMode === "idea"}">${icon("lightbulb")}Discuss my idea</button></div>
         ${S.askMode === "idea" ? `<label class="sr" for="idea">Your idea</label><textarea id="idea" placeholder="Type or dictate your idea. A sentence is enough.">${esc(S.askIdea)}</textarea>` : ""}
         <div class="acts"><a class="pill white lg" id="open-claude" href="${esc(claudeUrl(prompt))}" target="_blank" rel="noopener" data-link="open-claude">${icon("sparkle")}<span>Open in Claude</span></a>
           <button class="pill glass lg" type="button" data-act="copy-prompt">${icon("copy")}<span>Copy prompt</span></button></div>
         <details class="peek"><summary>See what Claude gets</summary><pre id="prompt-preview">${esc(prompt)}</pre></details>
-        <p class="fine">It’s also saved to For Claude, here and on the PC.</p>
+        ${guest ? "" : `<p class="fine">It’s also saved to For Claude, here and on the PC.</p>`}
       </div>
     </div>`;
   const ta = $("#idea");
   if (ta) {
     ta.addEventListener("input", () => {
       S.askIdea = ta.value;
-      const p = promptFor(it, S.askMode, ta.value);
+      const p = promptFor(it, S.askMode, ta.value, guest);
       $("#open-claude").href = claudeUrl(p);
       $("#prompt-preview").textContent = p;
     });
@@ -601,6 +625,7 @@ function closeAsk() {
   if (back?.isConnected) back.focus({ preventScroll: true });
 }
 async function saveFor(item, mode = "help", idea = "", quiet = false) {
+  if (isGuest()) return; // his For Claude list is his
   try {
     await post("/api/news/save", { item, mode, idea });
     await loadSaved();
@@ -614,6 +639,8 @@ const itemFor = (el) => S.byId.get(el.dataset.id) || S.synth.get(el.dataset.id);
 async function act(name, el) {
   if (name.startsWith("reel-")) return reels.act(name, el);
   if (name.startsWith("set-")) return settings.act(name, el);
+  if (name.startsWith("inv-")) return guests.act(name, el);
+  if (name.startsWith("guest-")) return guestAct(name);
   switch (name) {
     case "needs-pc": toast(source.REASON[el.dataset.why] || source.REASON.default); break;
     case "clear": S.query = ""; $("#q").value = ""; S.limit = PAGE; if (S.topic) location.hash = "#/discover"; else renderView(); break;
@@ -645,7 +672,7 @@ async function act(name, el) {
       break;
     }
     case "copy-prompt": {
-      const p = promptFor(S.ask, S.askMode, askIdea());
+      const p = promptFor(S.ask, S.askMode, askIdea(), isGuest());
       try { await navigator.clipboard.writeText(p); toast("Prompt copied. Paste it into Claude."); } catch { window.prompt("Copy this", p); }
       saveFor(S.ask, S.askMode, askIdea(), true);
       break;
@@ -660,6 +687,7 @@ async function act(name, el) {
     case "unsave": await post("/api/news/unsave", { key: el.dataset.key }).catch(() => {}); await loadSaved(); renderView(true); break;
     case "close": closeAsk(); break;
     case "refresh": {
+      if (isGuest()) { guestRefresh(); break; }
       try {
         await post("/api/news/refresh");
         S.status = { ...(S.status || {}), refreshing: true };
@@ -695,12 +723,140 @@ function pollRefresh() {
   setTimeout(tick, 2500);
 }
 
+// ---------- guests: his invite link, the welcome, and the calm screens ----------
+const guests = createGuests({ $, esc, g, post, source });
+function showScreen(kind, ctx = {}) {
+  S.screen = kind;
+  S.screenCtx = ctx;
+  closeAsk();
+  render();
+}
+function leaveScreen() {
+  S.screen = "";
+  S.screenCtx = {};
+}
+// A fresh start for the pages: what a guest reads comes from news.json only.
+function resetNews() {
+  Object.assign(S, { items: [], charts: null, status: null, saved: [], repos: {}, feedAt: 0, offline: false, error: "" });
+  reels.data = null;
+  index();
+}
+async function loadAll() {
+  S.repos = {};
+  await Promise.all([loadFeed(), loadCharts(), loadStatus(), loadSaved()]);
+  loadRepos("today");
+}
+async function openInvite(arrived) {
+  if (arrived.bad) return showScreen("bad", { canRead: isGuest(), own: !isGuest() && !!source.token() });
+  if (isGuest() && source.guestToken() === arrived.token) { // the same link, opened again
+    if (source.guest()?.name !== arrived.name) await source.becomeGuest(arrived);
+    leaveScreen();
+    return startGuest();
+  }
+  if (source.token() && !isGuest()) return showScreen("owner", { name: arrived.name, invite: arrived });
+  return acceptInvite(arrived);
+}
+// The welcome loads the news behind it, so Start reading opens at once and an ended key shows its screen.
+let welcomeLoad = null;
+async function acceptInvite(arrived) {
+  await source.becomeGuest(arrived);
+  resetNews();
+  showScreen("welcome", { name: arrived.name });
+  const load = source.fetchNews();
+  welcomeLoad = load;
+  load.then((doc) => {
+    if (S.screen !== "welcome" || welcomeLoad !== load) return;
+    const lead = guests.fillWelcome(doc?.news.feed || []);
+    if (lead) ambient.light(thumbOf(lead).kind === "photo" ? thumbOf(lead).src : artUrl(artName(lead)));
+  }, (e) => { if (welcomeLoad === load && ENDED.includes(e.code)) showScreen("ended"); });
+}
+async function startGuest() {
+  render();
+  let offline = false;
+  try { await source.fetchNews(); } catch (e) {
+    if (ENDED.includes(e.code)) return showScreen("ended");
+    offline = true; // offline, or GitHub away for a moment: the last edition on this device
+  }
+  await loadAll();
+  if (S.screen) return;
+  S.offline ||= offline;
+  render();
+  if (S.offline) toast(S.items.length ? "Offline: showing the last edition" : "No connection right now");
+}
+async function guestRefresh() {
+  const before = source.newsAt();
+  S.checking = true;
+  paintEdition();
+  try {
+    await source.fetchNews();
+    S.offline = false;
+    await loadAll();
+    toast(source.newsAt() > before ? "Fresh news is in" : "You’re up to date");
+  } catch (e) {
+    if (ENDED.includes(e.code)) { S.checking = false; return showScreen("ended"); }
+    toast("Can’t check for news right now. Try again in a while.");
+  }
+  S.checking = false;
+  render();
+}
+async function leaveNews() {
+  await source.leaveGuest();
+  resetNews();
+  showScreen("left");
+}
+async function openPasted(text) {
+  const got = invite.parseInvite(text);
+  if (!got) return guests.pasteError("Paste the link first.");
+  if (got.bad) return guests.pasteError(`This invite link is incomplete. Ask ${invite.OWNER} to send it again.`);
+  await openInvite(got);
+}
+async function guestAct(name) {
+  switch (name) {
+    case "guest-enter": {
+      const button = $('[data-act="guest-enter"]');
+      if (button) button.disabled = true;
+      let failed = null;
+      try { await welcomeLoad; } catch (e) { failed = e; }
+      if (failed && ENDED.includes(failed.code)) return; // a dead key shows its own screen
+      if (!failed) await loadAll();
+      if (S.screen !== "welcome") return;
+      leaveScreen();
+      parseHash();
+      window.scrollTo(0, 0);
+      if (failed) return startGuest(); // offline, or GitHub away for a moment: try again, else the offline page
+      render();
+      break;
+    }
+    case "guest-retry": {
+      try { await source.fetchNews(); } catch (e) { toast(ENDED.includes(e.code) ? `It still won’t open. Ask ${invite.OWNER} for a new link.` : "No connection right now. Try again in a while."); return; }
+      leaveScreen();
+      await loadAll();
+      render();
+      break;
+    }
+    case "guest-open": leaveScreen(); fromDevice(); startGuest(); break;
+    case "guest-mine": leaveScreen(); start(); break; // his own device: back to his own news
+    case "guest-forget": await leaveNews(); break;
+    case "guest-keep": leaveScreen(); start(); break;
+    case "guest-switch": if (S.screenCtx.invite) await acceptInvite(S.screenCtx.invite); break;
+    case "guest-to-paste": showScreen("paste"); break;
+    case "guest-paste": {
+      let text = "";
+      try { text = await navigator.clipboard.readText(); } catch { return guests.pasteError("This browser won’t paste here. Paste the link in the box below."); }
+      await openPasted(text);
+      break;
+    }
+    default: break;
+  }
+}
+
 // ---------- Reels and Settings: the launcher's own modules ----------
 const reels = createReels({
-  $, $$, esc, g, api, post, toast, copy, openPanel() {}, closePanel() {}, place: "news",
+  $, $$, esc, g, api, post, toast, copy, openPanel() {}, closePanel() {}, place: "news", guest: isGuest,
   ask: (item, trigger) => openAsk(S.byId.get(item.id) || item, trigger), // MK News' own Ask Claude sheet
 });
-const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () => "dark", setTheme() {}, place: "news", frame: settingsFrame }, reels);
+const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () => "dark", setTheme() {}, place: "news", frame: settingsFrame,
+  guest: () => (isGuest() ? source.guest() : null), leave: leaveNews }, reels);
 
 // ---------- data ----------
 function index() {
@@ -760,6 +916,16 @@ function paintEdition() {
   if (!el) return;
   const st = S.status, last = st?.last;
   let a, b;
+  if (isGuest()) { // his edition as it was last shared, never a word about the PC
+    const at = source.newsAt();
+    a = S.checking ? `<span class="pulse" aria-hidden="true"></span>Checking for news…`
+      : S.offline ? `${icon("offline")}Offline` : S.route === "home" ? plural(S.items.length, "story", "stories") : at ? `Updated ${esc(ago(at))}` : "";
+    b = S.checking ? "" : S.offline ? (at ? `showing the edition from ${esc(ago(at))}` : "nothing saved on this device yet")
+      : S.route === "home" && at ? `updated ${esc(ago(at))}` : "";
+    el.classList.toggle("compact", !b);
+    el.innerHTML = `<span class="ed-a">${a}</span><span class="ed-b">${b ? `<i aria-hidden="true">·</i>${b}` : ""}${a || b ? `<i aria-hidden="true">·</i>` : ""}<button class="link" type="button" data-act="refresh"${S.checking ? " disabled" : ""}>${icon("refresh")}Refresh</button></span>`;
+    return;
+  }
   if (S.offline) {
     a = `${icon("offline")}Offline`;
     b = S.items.length ? `showing the feed saved ${esc(ago(S.feedAt))} (${plural(S.items.length, "story", "stories")})` : "nothing saved on this device yet";
@@ -796,6 +962,7 @@ function renderView(keepScroll = false) {
   if (S.route !== "reels") reels.unmount();
   if (S.route === "reels") { v.innerHTML = reels.render(); S.after.push(() => reels.mount()); }
   else if (S.route === "settings") { v.innerHTML = settingsFrame(settings.render()); S.after.push(() => settings.mount()); }
+  else if (S.route === "invite") { v.innerHTML = guests.inviteView(); S.after.push(() => guests.mountInvite()); }
   else v.innerHTML = S.route === "discover" ? discoverView() : S.route === "saved" ? savedView() : homeView();
   mountRows(v);
   syncInk($(".seg", v));
@@ -807,16 +974,36 @@ function renderView(keepScroll = false) {
   if (keepScroll) scrollTo(0, y);
 }
 function render() {
+  document.body.classList.toggle("guest", isGuest());
+  if (S.screen) return paintScreen();
   document.body.dataset.view = S.route;
-  const tabOf = S.route === "saved" ? "settings" : S.route; // Saved sits inside Settings
+  const tabOf = ["saved", "invite"].includes(S.route) ? "settings" : S.route; // Saved and Invite sit inside Settings
   for (const a of $$(".tabs [data-route], .tabbar [data-route]")) a.setAttribute("aria-current", a.dataset.route === tabOf ? "page" : "false");
   for (const a of $$(".tabbar a")) a.innerHTML = tabInner(a.dataset.route, a.dataset.route === tabOf);
   syncInk($(".tabs"));
   paintChips();
   paintEdition();
-  const titles = { home: "MK News", reels: "Reels · MK News", discover: "Topics · MK News", settings: "Settings · MK News", saved: "Saved · MK News" };
+  const titles = { home: "MK News", reels: "Reels · MK News", discover: "Topics · MK News", settings: "Settings · MK News", saved: "Saved · MK News", invite: "Invite someone · MK News" };
   document.title = titles[S.route];
   renderView();
+}
+// A guest screen (welcome, ended, broken link, left, his own key, paste) takes the whole page.
+function lightWelcome(doc) {
+  if (S.screen !== "welcome") return;
+  const lead = guests.fillWelcome(doc?.news.feed || []);
+  if (lead) { ambient.dim(false); ambient.light(thumbOf(lead).kind === "photo" ? thumbOf(lead).src : artUrl(artName(lead))); }
+}
+function paintScreen() {
+  document.body.dataset.view = "guest";
+  document.title = "MK News";
+  reels.unmount();
+  document.documentElement.classList.remove("route-reels");
+  $("#view").innerHTML = guests.screen(S.screen, S.screenCtx);
+  ambient.dim(S.screen !== "welcome");
+  if (S.screen === "welcome") welcomeLoad?.then(lightWelcome, () => {});
+  $('[data-form="paste"]')?.addEventListener("submit", (e) => { e.preventDefault(); openPasted($("#paste-link").value); });
+  window.scrollTo(0, 0);
+  $("#gs-title")?.focus({ preventScroll: true });
 }
 function tabInner(route, on) {
   const [, label, , name] = TABS.find((t) => t[0] === route);
@@ -832,6 +1019,7 @@ function parseHash() {
   const legacy = { foryou: ["home"], models: ["discover", "models"], repos: ["discover", "repos"] };
   let [route, sub] = own(legacy, parts[0]) ? legacy[parts[0]] : parts;
   if (!ROUTES.includes(route)) route = "home";
+  if ((route === "saved" && isGuest()) || (route === "invite" && source.BACKUP)) route = "settings"; // his list; inviting needs the PC
   S.route = route;
   S.sub = route === "discover" ? (["models", "repos"].includes(sub) ? sub : "stories") : "";
   S.topic = route === "discover" && own(TOPIC, q.get("t")) ? q.get("t") : "";
@@ -855,8 +1043,8 @@ function shell() {
       <label class="search">${icon("search")}<span class="sr">Search news</span><input id="q" type="search" placeholder="Search news…" autocomplete="off" spellcheck="false" enterkeyhint="search"></label>
     </div>
     <div class="bar-end">
-      <a class="launcher" href="../">${icon("back")}<span>Launcher</span></a>
-      <a class="round phone-only" href="../" aria-label="Back to the launcher">${icon("grid")}</a>
+      <a class="launcher owner-only" href="../">${icon("back")}<span>Launcher</span></a>
+      <a class="round phone-only owner-only" href="../" aria-label="Back to the launcher">${icon("grid")}</a>
       <button class="round phone-only" type="button" data-act="search" aria-label="Search news">${icon("search")}</button>
     </div>`;
   $("#tabbar").innerHTML = TABS.map(([r, , h]) => `<a href="${h}" data-route="${r}">${tabInner(r, false)}</a>`).join("");
@@ -866,6 +1054,8 @@ function bind() {
     const a = e.target.closest("[data-act]");
     if (a && !a.disabled) { e.preventDefault(); act(a.dataset.act, a); return; }
     if (e.target.closest('[data-link="open-claude"]') && S.ask) saveFor(S.ask, S.askMode, askIdea(), true);
+    const stop = e.target.closest("[data-stop]"); // Stop access opens GitHub and says what to delete there
+    if (stop) document.getElementById(`stop-${stop.dataset.stop}`)?.removeAttribute("hidden");
   });
   document.addEventListener("keydown", (e) => {
     const sheet = $("#sheet");
@@ -910,7 +1100,12 @@ function bind() {
       ambient.light(img.dataset.art);
     }
   }, true);
-  window.addEventListener("hashchange", route);
+  window.addEventListener("hashchange", () => {
+    // an invite opened in a tab where MK News is already open only changes the fragment: the page does not reload
+    const next = invite.takeInvite();
+    if (next) { if (source.BACKUP) openInvite(next); return; }
+    route();
+  });
   const bar = () => document.documentElement.style.setProperty("--bar", Math.min(1, scrollY / 80).toFixed(3));
   window.addEventListener("scroll", bar, { passive: true });
   bar();
@@ -919,10 +1114,8 @@ function bind() {
   document.fonts?.ready.then(() => { syncInk($(".tabs")); syncInk($("#view .seg")); liftHero(); });
 }
 
-async function boot() {
-  ambient = createAmbient($("#light"));
-  shell();
-  bind();
+// The last copy on this device first, so the page paints at once; the fresh one follows.
+function fromDevice() {
   S.items = localGet("feed", []);
   S.feedAt = localGet("feedAt", 0);
   S.charts = localGet("charts", null);
@@ -931,13 +1124,26 @@ async function boot() {
   index();
   parseHash();
   render();
+}
+async function boot() {
+  ambient = createAmbient($("#light"));
+  shell();
+  bind();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("../sw.js").catch(() => {});
+  if (arrival) return openInvite(arrival);
+  if (isGuest()) { fromDevice(); return startGuest(); }
+  // The published copy with no key at all: a guest's link (or an iPhone Home Screen app, which keeps its own
+  // storage) is pasted here; his own key is one tap further, on the launcher's Connect screen.
+  if (source.BACKUP && !source.token()) return showScreen(source.guest()?.left ? "left" : "paste");
+  return start();
+}
+async function start() { // his own MK News: the PC's API, or the backup's snapshot
+  fromDevice();
   await Promise.all([loadFeed(), loadCharts(), loadStatus(), loadSaved()]);
   render();
   loadRepos("today");
-  if (source.BACKUP && !source.token()) { location.href = "../#/connect"; return; }
   if (source.BACKUP && source.snapshotAt()) toast(`Backup: MK News as your PC last saw it, ${source.whenWords(source.snapshotAt())}`);
   else if (S.offline) toast(S.items.length ? "Offline: showing the last saved feed" : "Can’t reach the PC right now");
   if (S.status?.refreshing) pollRefresh();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("../sw.js").catch(() => {});
 }
 boot();

@@ -1,9 +1,11 @@
 // Settings: the choices he decides. Every control changes behaviour: Reels topics, auto-advance, "start where I
 // left off", video clips and their channel list are shared by his devices (server); voice and read-aloud stay on
 // this device. The launcher (#/settings) and MK News (news/#/settings) run this same module: in MK News (d.place
-// "news") it shows Saved stories, Reels, Video clips and the way back, in the Newsreel look.
+// "news") it shows Saved stories, his Guests, Reels, Video clips and the way back, in the Newsreel look. A guest
+// (MK News opened from his invite link, d.guest) gets Sharing, Reels on their own device and About: nothing of his.
 import { devicePrefs } from "./reels-prefs.js";
 import * as source from "./source.js";
+import { OWNER, TOKENS_PAGE, keyName } from "./news/invite.js";
 
 const BACKUP_WORDS = {
   pushed: "Pushed", current: "Up to date", working: "Pushing…", waiting: "First push soon", error: "Couldn't push",
@@ -19,23 +21,74 @@ export function createSettings(d, reels) {
   const { $, esc, g, api, post, toast, ago, theme, setTheme, phonePanel, inside } = d;
   const inNews = d.place === "news";
   const device = devicePrefs(globalThis.localStorage);
-  const S = { reels: null, health: null, voices: [], busy: false, insideApps: [], saved: null, clips: null };
+  const S = { reels: null, health: null, voices: [], busy: false, insideApps: [], saved: null, clips: null, invites: null };
   const insideOn = () => { const v = inside?.get(); return typeof v === "boolean" ? v : !!inside?.phone(); };
+  const guestNow = () => (inNews && d.guest ? d.guest() : null);
+  const pcOnly = () => source.BACKUP && !guestNow(); // a guest's Reels choices are their own, on their device
 
   const shared = () => S.reels?.settings || reels.data?.settings || null;
   const scope = (where) => `<span class="scope">${g(where === "device" ? "phone" : "refresh")}${where === "device" ? "This device" : "All your devices"}</span>`;
-  const sw = (act, on, label) => source.BACKUP && act !== "set-read"
+  const sw = (act, on, label) => pcOnly() && act !== "set-read"
     ? `<button class="switch needs-pc" type="button" role="switch" aria-checked="${on}" aria-disabled="true" data-act="needs-pc" data-why="settings" aria-label="${esc(label)}"><i></i></button>`
     : `<button class="switch" type="button" role="switch" aria-checked="${on}" data-act="${act}" aria-label="${esc(label)}"><i></i></button>`;
-  const shareAct = (act) => (source.BACKUP ? `data-act="needs-pc" data-why="settings" aria-disabled="true"` : `data-act="${act}"`);
+  const shareAct = (act) => (pcOnly() ? `data-act="needs-pc" data-why="settings" aria-disabled="true"` : `data-act="${act}"`);
+  const day = (iso) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   function row(title, text, control, where, extra = "") {
     return `<div class="set-row${extra}"><div class="set-text"><b>${title}</b>${text ? `<span>${text}</span>` : ""}${where ? scope(where) : ""}</div>
       <div class="set-ctl">${control}</div></div>`;
   }
 
+  const paceSeg = (s) => `<div class="seg" role="group" aria-label="Auto-advance speed">${["relaxed", "normal", "fast"].map((p) => `<button type="button" ${shareAct("set-pace")} data-v="${p}" aria-pressed="${s.pace === p}" ${s.auto_advance ? "" : "disabled"}>${p[0].toUpperCase() + p.slice(1)}</button>`).join("")}</div>`;
+  function voiceCtl(dev) {
+    const voices = S.voices.length
+      ? `<select id="set-voice" aria-label="Voice"><option value="">Device default</option>${S.voices.map((v) => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === dev.voice ? "selected" : ""}>${esc(v.name)}${v.lang ? ` · ${esc(v.lang)}` : ""}</option>`).join("")}</select>`
+      : `<span class="muted">${globalThis.speechSynthesis ? "Loading voices…" : "This browser can't read aloud"}</span>`;
+    return `${voices}<button class="btn sm ghost" type="button" data-act="set-sample" ${globalThis.speechSynthesis ? "" : "disabled"}>${g("volume")}Try it</button>`;
+  }
+
+  // A guest's Settings: who shared it, their Reels choices on this device, About. Never his lists or his apps.
+  function guestHtml(gu, s, dev) {
+    const reelsCard = !s ? `<div class="skeleton" style="height:260px;border-radius:18px"></div>` : `<div class="set-card">
+        ${row("Auto-advance", "Moves on after a calm reading time. Tap a reel to pause it.", sw("set-auto", s.auto_advance, "Auto-advance"), "device")}
+        ${row("Speed", "How long each reel stays.", paceSeg(s), "", s.auto_advance ? " sub wrap" : " sub wrap off")}
+        ${row("Read aloud automatically", "Each reel reads itself out when it comes up.", sw("set-read", dev.readAloud, "Read aloud automatically"), "device")}
+        ${row("Voice", "The voice for Listen and read aloud.", voiceCtl(dev), "device", " wrap")}
+      </div>`;
+    return `<div class="settings news-settings guest-settings">
+      <section class="section"><div class="section-head"><h2>Sharing</h2></div><div class="set-card">
+        ${row("Shared by", "", `<span class="set-val">${esc(OWNER)}</span>`)}
+        ${row("Invite for", "", `<span class="set-val" dir="auto">${esc(gu.name)}</span>`)}
+        <button class="set-link danger" type="button" data-act="set-leave">${g("x")}<span><b>Leave</b><span>Forgets this invite on this device. ${esc(OWNER)}'s news stays as it is.</span></span></button></div></section>
+      <section class="section"><div class="section-head"><h2>Reels</h2></div>${reelsCard}</section>
+      <section class="section"><div class="section-head"><h2>About</h2></div><div class="set-card pad">
+        <p class="about-line"><b>MK News</b> is the AI news ${esc(OWNER)} follows: lab blogs, status pages, release notes, papers, Hacker News and GitHub. New stories land through the day.</p></div></section>
+    </div>`;
+  }
+
+  // His guests: everyone with an invite link, and the way to make another. Inviting happens on the PC's own copy.
+  function guestsCard() {
+    if (source.BACKUP) return `<div class="set-card pad"><p class="sub needs-pc-line">${g("monitor")}${esc(source.REASON.invite)}</p></div>`;
+    const now = Date.now();
+    const rows = (S.invites || []).map((e) => {
+      const ended = Date.parse(e.expires) <= now;
+      const when = `Made ${day(e.made)} · ${ended ? "ended" : "ends"} ${e.expires_known ? "" : "about "}${day(e.expires)}`;
+      return `<div class="set-row col invite-item" data-invite="${esc(e.id)}">
+        <div class="invite-line"><b dir="auto">${esc(e.name)}</b><span class="invite-key" aria-label="Key ending ${esc(String(e.last4).split("").join(" "))}">${g("lock")}…${esc(e.last4)}</span></div>
+        <span class="invite-when${ended ? " ended" : ""}">${esc(when)}</span>
+        <div class="btns"><a class="btn sm ghost" href="${TOKENS_PAGE}" target="_blank" rel="noopener noreferrer" data-stop="${esc(e.id)}" aria-describedby="stop-${esc(e.id)}">${g("external")}Stop access</a>
+          <button class="btn sm ghost" type="button" data-act="set-invite-remove" data-id="${esc(e.id)}" aria-label="Remove ${esc(e.name)} from the list">Remove from list</button></div>
+        <p class="invite-stop" id="stop-${esc(e.id)}" hidden>On GitHub, open “${esc(keyName(e.name))}” and press Delete. ${esc(e.name)}'s link stops working at once.</p></div>`;
+    }).join("");
+    return `<div class="set-card">
+      <a class="set-link" href="#/invite">${g("user")}<span><b>Invite someone</b><span>A link for family or friends, with a key of their own. It works even when your PC is off.</span></span>${g("chevron-right")}</a>
+      ${S.invites == null ? `<div class="set-row"><span class="muted">Loading your guests…</span></div>` : rows}</div>`;
+  }
+
   function render() {
     const s = shared();
     const dev = device.get();
+    const gu = guestNow();
+    if (gu) return guestHtml(gu, s, dev);
     const topics = S.reels?.topics || reels.data?.topics || [];
     const off = new Set(s?.topics_off || []);
     let reelsCard;
@@ -43,20 +96,16 @@ export function createSettings(d, reels) {
       reelsCard = `<div class="skeleton" style="height:320px;border-radius:18px"></div>`;
     } else {
       const chips = topics.map((t) => `<button class="chip${source.BACKUP ? " needs-pc" : ""}" type="button" ${shareAct("set-topic")} data-v="${esc(t.id)}" aria-pressed="${!off.has(t.id)}">${g(off.has(t.id) ? "plus" : "check")}${esc(t.label)}<span class="count">${t.count}</span></button>`).join("");
-      const pace = ["relaxed", "normal", "fast"].map((p) => `<button type="button" ${shareAct("set-pace")} data-v="${p}" aria-pressed="${s.pace === p}" ${s.auto_advance ? "" : "disabled"}>${p[0].toUpperCase() + p.slice(1)}</button>`).join("");
-      const voices = S.voices.length
-        ? `<select id="set-voice" aria-label="Voice"><option value="">Device default</option>${S.voices.map((v) => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === dev.voice ? "selected" : ""}>${esc(v.name)}${v.lang ? ` · ${esc(v.lang)}` : ""}</option>`).join("")}</select>`
-        : `<span class="muted">${globalThis.speechSynthesis ? "Loading voices…" : "This browser can't read aloud"}</span>`;
       const total = S.reels?.items?.length ?? reels.data?.items?.length ?? 0;
       const seen = S.reels?.seen?.length ?? reels.data?.seen?.length ?? 0;
       reelsCard = `<div class="set-card">
         <div class="set-row col"><div class="set-text"><b>Topics</b><span>Reels show stories from the topics that are on. A story stays if any of its topics is on.</span>${scope("shared")}</div>
           <div class="chips wrap" role="group" aria-label="Topics">${chips || `<span class="muted">Topics appear once MK News has stories.</span>`}</div></div>
         ${row("Auto-advance", "Moves on after a calm reading time. Tap a reel to pause it.", sw("set-auto", s.auto_advance, "Auto-advance"), "shared")}
-        ${row("Speed", "How long each reel stays.", `<div class="seg" role="group" aria-label="Auto-advance speed">${pace}</div>`, "", s.auto_advance ? " sub wrap" : " sub wrap off")}
+        ${row("Speed", "How long each reel stays.", paceSeg(s), "", s.auto_advance ? " sub wrap" : " sub wrap off")}
         ${row("Start where I left off", "Open Reels at the first story you haven't seen.", sw("set-resume", s.resume, "Start where I left off"), "shared")}
         ${row("Read aloud automatically", "Each reel reads itself out when it comes up.", sw("set-read", dev.readAloud, "Read aloud automatically"), "device")}
-        ${row("Voice", "The voice for Listen and read aloud.", `${voices}<button class="btn sm ghost" type="button" data-act="set-sample" ${globalThis.speechSynthesis ? "" : "disabled"}>${g("volume")}Try it</button>`, "device", " wrap")}
+        ${row("Voice", "The voice for Listen and read aloud.", voiceCtl(dev), "device", " wrap")}
         ${row("Seen reels", `${seen} of ${total} seen`, `<button class="btn sm ghost" type="button" data-act="set-clear-seen" ${seen ? "" : "disabled"}>${g("rotate-ccw")}Start over</button>`, source.BACKUP ? "device" : "shared")}
       </div>${source.BACKUP ? `<p class="sub needs-pc-line">${g("monitor")}${esc(source.REASON.settings)}</p>` : ""}`;
     }
@@ -81,7 +130,8 @@ export function createSettings(d, reels) {
       : `<div class="set-card pad"><dl class="kv set-kv">
         <dt>Backup</dt><dd><a href="${esc(bk.url || source.BACKUP_URL)}" target="_blank" rel="noopener">${esc((bk.url || source.BACKUP_URL).replace(/^https:\/\//, ""))}</a></dd>
         <dt>Snapshot</dt><dd><span class="st ${bMark(bk.snapshot)}"><i></i>${esc(bWord(bk.snapshot))}</span>${bk.snapshot?.pushed_at ? ` <span class="muted">· last pushed ${esc(ago(bk.snapshot.pushed_at))}</span>` : ""}${bk.snapshot?.detail ? ` <span class="muted">· ${esc(bk.snapshot.detail)}</span>` : ""}</dd>
-        <dt>App shell</dt><dd><span class="st ${bMark(bk.web)}"><i></i>${esc(bWord(bk.web))}</span>${bk.web?.published_at ? ` <span class="muted">· ${esc(ago(bk.web.published_at))}</span>` : ""}${bk.web?.detail ? ` <span class="muted">· ${esc(bk.web.detail)}</span>` : ""}</dd></dl>
+        <dt>App shell</dt><dd><span class="st ${bMark(bk.web)}"><i></i>${esc(bWord(bk.web))}</span>${bk.web?.published_at ? ` <span class="muted">· ${esc(ago(bk.web.published_at))}</span>` : ""}${bk.web?.detail ? ` <span class="muted">· ${esc(bk.web.detail)}</span>` : ""}</dd>
+        <dt>Guest news</dt><dd><span class="st ${bMark(bk.news)}"><i></i>${esc(bWord(bk.news))}</span>${bk.news?.pushed_at ? ` <span class="muted">· last pushed ${esc(ago(bk.news.pushed_at))}</span>` : ""}${bk.news?.held ? ` <span class="muted">· ${bk.news.held} ${bk.news.held === 1 ? "story" : "stories"} held back by the privacy check</span>` : ""}${bk.news?.detail ? ` <span class="muted">· ${esc(bk.news.detail)}</span>` : ""}</dd></dl>
         <p class="sub">If the PC goes down, open the backup: it shows what was last true and greys out what needs the PC. It asks once for a read-only key to <b>${esc(bk.repo ? bk.repo.split("/").pop() : source.REPO_NAME)}</b>.</p>
         <div class="btns" style="margin-top:12px"><button class="btn sm" type="button" data-act="copy" data-text="${esc(bk.url || source.BACKUP_URL)}">${g("copy")}Copy backup link</button></div></div>`;
     const updates = `<dl class="kv set-kv">
@@ -95,6 +145,7 @@ export function createSettings(d, reels) {
       return `<div class="settings news-settings">
       <section class="section"><div class="section-head"><h2>Saved stories</h2></div><div class="set-card">
         <a class="set-link" href="#/saved">${g("bookmark")}<span><b>Saved for Claude</b><span>${n == null ? "Loading…" : n ? `${n} ${n === 1 ? "story" : "stories"}, ready to open in Claude` : "Nothing saved yet. Tap Save on any story."}</span></span>${n ? `<span class="count num">${n}</span>` : ""}${g("chevron-right")}</a></div></section>
+      <section class="section"><div class="section-head"><h2>Guests</h2></div>${guestsCard()}</section>
       <section class="section"><div class="section-head"><h2>Reels</h2></div>${reelsCard}</section>
       <section class="section"><div class="section-head"><h2>Video clips</h2></div>${clipsCard}</section>
       <section class="section"><div class="section-head"><h2>About</h2></div><div class="set-card">
@@ -172,11 +223,14 @@ export function createSettings(d, reels) {
   async function mount() {
     bindVoice();
     loadVoices();
-    const [r, h, a, sv] = await Promise.allSettled([api("/api/reels"), api("/api/health"), inNews ? Promise.resolve(null) : api("/api/apps"),
-      inNews ? api("/api/news/saved") : Promise.resolve(null)]);
+    const gu = guestNow(), his = inNews && !gu;
+    const none = Promise.resolve(null);
+    const [r, h, a, sv, iv] = await Promise.allSettled([api("/api/reels"), gu ? none : api("/api/health"), inNews ? none : api("/api/apps"),
+      his ? api("/api/news/saved") : none, his && !source.BACKUP ? api("/api/news/invites") : none]);
     if (r.status === "fulfilled") { S.reels = r.value; reels.data = r.value; S.clips = r.value.clips || null; }
     if (sv.status === "fulfilled" && sv.value) S.saved = sv.value.items || [];
     else if (inNews) S.saved = [];
+    if (his && !source.BACKUP) S.invites = iv.status === "fulfilled" && iv.value ? iv.value.items || [] : [];
     if (h.status === "fulfilled") S.health = h.value;
     if (a.status === "fulfilled" && a.value) S.insideApps = (a.value.apps || []).filter((x) => x.open === "inside").map((x) => x.name);
     if (a.status === "fulfilled" && a.value) { S.selfRepo = a.value.self_repo || ""; S.owner = "Mohamed3042"; S.liveOrigin = a.value.public_origin || ""; }
@@ -274,6 +328,16 @@ export function createSettings(d, reels) {
         break;
       }
       case "set-theme": setTheme(el.dataset.v); paint(); $(`[data-act="set-theme"][data-v="${el.dataset.v}"]`)?.focus(); break;
+      case "set-leave": d.leave?.(); break;
+      case "set-invite-remove": {
+        try {
+          S.invites = (await post("/api/news/invites/remove", { id: el.dataset.id })).items || [];
+          toast("Removed from the list. The link still works until you stop it on GitHub.");
+        } catch (e) { toast(e.message); }
+        paint();
+        $('a[href="#/invite"]')?.focus();
+        break;
+      }
       default: break;
     }
   }

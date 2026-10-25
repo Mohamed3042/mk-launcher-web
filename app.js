@@ -1264,6 +1264,7 @@ async function connectWith(value, from) {
   S.connecting = false;
   if (!r.ok) { S.connectError = r.message; render(); $("#key")?.focus(); return; }
   try { source.saveToken(value, from); } catch (e) { S.connectError = e.message; render(); return; }
+  if (source.guest() && !source.guest().left) await source.leaveGuest(); // his own key: MK News is his again on this device
   toast(from === "mkc" ? "Connected with your MK Cinema key" : "Connected");
   location.hash = "#/home";
   await refreshBackup(true);

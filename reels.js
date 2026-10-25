@@ -17,6 +17,7 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 export function createReels(d) {
   const { $, $$, esc, g, api, post, toast, copy, openPanel, closePanel } = d;
   const inNews = d.place === "news";
+  const guest = () => !!d.guest?.(); // MK News opened from his invite: no Save, no topic editing, no PC
   const newsLink = inNews ? "#/home" : "news/";
   const settingsLink = "#/settings";
   const device = devicePrefs(globalThis.localStorage);
@@ -111,10 +112,16 @@ export function createReels(d) {
         <p>That's every reel and clip for now. New stories land through the day.</p>
         <div class="btns"><button class="btn primary" data-act="reel-restart">${g("rotate-ccw")}Start over</button>
         <a class="btn" href="${newsLink}">${g("news")}${inNews ? "Back to the news" : "Open MK News"}</a></div>
-        <a class="link-btn" href="${settingsLink}">Change topics</a></div>
+        ${guest() ? "" : `<a class="link-btn" href="${settingsLink}">Change topics</a>`}</div>
     </section>`;
   }
   function emptyHtml() {
+    if (guest()) {
+      return `<section class="reel caught" data-i="0" data-id="" tabindex="-1">
+      <div class="reel-media" aria-hidden="true"><img class="reel-art" src="${esc(artUrl("default"))}" alt=""></div><div class="reel-shade" aria-hidden="true"></div>
+      <div class="caught-body">${g("news", "big")}<h2>Nothing to watch yet</h2><p>New stories land through the day. Check again soon.</p>
+        <div class="btns"><button class="btn primary" type="button" data-act="refresh">${g("refresh")}Check for news</button><a class="btn" href="${newsLink}">${g("news")}Back to the news</a></div></div></section>`;
+    }
     const why = BACKUP && R.data?.news === false ? "The last snapshot from your PC had no MK News stories."
       : R.data?.news === false ? "MK News isn't running on the PC, so there are no stories to show yet."
       : (settings().topics_off || []).length ? "No stories in the topics you have on. Switch more topics on in Settings."
@@ -128,7 +135,7 @@ export function createReels(d) {
     const b = (act, icon, label) => `<button class="rb" type="button" data-act="${act}">${g(icon)}<span>${label}</span></button>`;
     return `<div class="reel-rail" role="group" aria-label="Reel actions">
       <a class="rb" id="reel-open" href="#" target="_blank" rel="noopener">${g("external")}<span>Open</span></a>
-      ${BACKUP ? `<button class="rb needs-pc" type="button" data-act="needs-pc" data-why="save" aria-disabled="true">${g("bookmark")}<span>Save</span></button>` : b("reel-save", "bookmark", "Save")}${b("reel-ask", "sparkles", "Ask Claude")}${b("reel-listen", "volume", "Listen")}${b("reel-copy", "link", "Copy link")}</div>`;
+      ${guest() ? "" : BACKUP ? `<button class="rb needs-pc" type="button" data-act="needs-pc" data-why="save" aria-disabled="true">${g("bookmark")}<span>Save</span></button>` : b("reel-save", "bookmark", "Save")}${b("reel-ask", "sparkles", "Ask Claude")}${b("reel-listen", "volume", "Listen")}${b("reel-copy", "link", "Copy link")}</div>`;
   }
 
   // ---------- the page ----------

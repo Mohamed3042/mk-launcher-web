@@ -178,16 +178,19 @@ export function metaExtra(it) {
 }
 
 
-// ---------- prompts (unchanged from v1) ----------
-export function promptFor(item, mode, idea) {
+// ---------- prompts (his unchanged from v1) ----------
+// A guest (MK News opened from an invite) asks for a plain explanation, and never carries his work.
+export function promptFor(item, mode, idea, guest = false) {
   const head = mode === "idea"
     ? "I read this and had an idea. Tell me honestly whether it's worth doing."
-    : "I read this and want your honest take on whether it helps me.";
+    : guest ? "Explain this to me in plain words: what happened, and why it matters."
+      : "I read this and want your honest take on whether it helps me.";
   const block = [`Title: ${item.title}`, `Source: ${item.source_name}${item.published ? `, ${new Date(item.published).toDateString()}` : ""}`, `Link: ${item.url}`, item.summary ? `Summary: ${item.summary}` : ""].filter(Boolean).join("\n");
   const ask = mode === "idea"
     ? `My idea: ${idea || "(I'll explain in the chat)"}\n\nGive me your verdict first (worth it / not worth it / maybe), then why in plain words, then the first concrete step if it's worth it.`
-    : "Read the link first. Does this help any of my projects or the way I work? If it doesn't, say so plainly. If it does: what exactly would I do with it, which project, and is it worth the time right now?";
-  return `${head}\n\n${block}\n\n${MY_WORK}\n\n${ask}`;
+    : guest ? "Read the link first if you can. Keep it short and simple, with no jargon."
+      : "Read the link first. Does this help any of my projects or the way I work? If it doesn't, say so plainly. If it does: what exactly would I do with it, which project, and is it worth the time right now?";
+  return guest ? `${head}\n\n${block}\n\n${ask}` : `${head}\n\n${block}\n\n${MY_WORK}\n\n${ask}`;
 }
 export const claudeUrl = (prompt) => `https://claude.ai/new?q=${encodeURIComponent(prompt)}`;
 

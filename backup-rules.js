@@ -1,8 +1,10 @@
 // The backup's rules, with no DOM: which mode the page is in, what needs the PC (and why), how old the
-// snapshot is in plain words, and how each launcher API call is answered from the snapshot.
+// snapshot is in plain words, and how each launcher API call is answered from the snapshot. Guests (MK News
+// opened from an invite link) get the same answers from news.json, the news-only repo.
 // Tested with node --test (tests/web/backup.test.mjs).
 
 export const SNAPSHOT_REPO = "mk-launcher-snapshot";
+export const NEWS_REPO = "mk-news-snapshot";
 export const BACKUP_URL = "https://mohamed3042.github.io/mk-launcher-web/";
 
 export const REASON = {
@@ -17,6 +19,7 @@ export const REASON = {
   save: "Saving for later needs your PC.",
   settings: "Shared choices are saved on your PC. Change them when it's back.",
   news: "Checking for new stories needs your PC.",
+  invite: "Inviting needs your PC.",
   default: "This needs your PC, and it's offline.",
 };
 
@@ -180,6 +183,7 @@ export function backupRead(snap, path, local = {}) {
     case "/api/news/charts": if (!news) throw new NeedsPc("news"); return news.charts || {};
     case "/api/news/status": if (!news) throw new NeedsPc("news"); return { ...(news.status || {}), refreshing: false };
     case "/api/news/repos": if (!news) throw new NeedsPc("news"); return { items: (news.repos?.[q.list || "today"] || []).slice(0, Number(q.limit || 25)) };
+    case "/api/news/invites": throw new NeedsPc("invite");
     case "/api/pc": case "/api/files": case "/api/files/raw": throw new NeedsPc("pc");
     case "/api/history": throw new NeedsPc("health");
     case "/api/github/stats": throw new NeedsPc("stats");
@@ -190,7 +194,7 @@ export function backupRead(snap, path, local = {}) {
 // POST: only this device's own marks work without the PC; everything else says why it can't.
 const WRITE_REASON = { "/api/start": "start", "/api/pins": "pins", "/api/pc/open": "pc", "/api/files/open": "pc",
   "/api/github/refresh": "refresh", "/api/shots/snap": "snap", "/api/news/save": "save", "/api/news/unsave": "save",
-  "/api/news/refresh": "news", "/api/settings": "settings" };
+  "/api/news/refresh": "news", "/api/settings": "settings", "/api/news/invites": "invite", "/api/news/invites/remove": "invite" };
 export function backupWrite(path, body, local) {
   const { route } = query(path);
   if (route === "/api/reels/seen") {
@@ -200,4 +204,77 @@ export function backupWrite(path, body, local) {
   if (route === "/api/reels/reset") { local.seen = []; local.reset = true; return { ok: true }; }
   if (route === "/api/recent") return { ok: true, local: true };
   throw new NeedsPc(WRITE_REASON[route] || "default");
+}
+
+// ---------- guests: MK News from news.json (a read-only key for the news-only repo) ----------
+// news.json is an allowlist the PC writes (core/backup.py build_news): still checked here, like the snapshot.
+export function validateNews(data) {
+  if (!data || data.schema !== 1 || data.kind !== "news-guest" || !Number.isFinite(data.at)) {
+    throw Object.assign(new Error(ERRORS.invalid), { code: "invalid" });
+  }
+  const news = obj(data.news), reels = obj(data.reels), last = obj(obj(news.status).last);
+  const linkOk = (it) => it && typeof it.id === "string" && http(it.url) && (!it.image || http(it.image));
+  return {
+    schema: 1, kind: "news-guest", at: data.at,
+    news: {
+      feed: arr(news.feed).filter(linkOk), charts: obj(news.charts),
+      status: { last: Number.isFinite(last.at) ? { at: last.at, ok: last.ok, counts: obj(last.counts) } : null },
+      repos: Object.fromEntries(Object.entries(obj(news.repos)).map(([k, v]) => [k, arr(v).filter(linkOk)])),
+    },
+    reels: { items: arr(reels.items).filter(linkOk), topics: arr(reels.topics), settings: obj(reels.settings) },
+  };
+}
+
+// Not part of what he shares (never shown: a guest's page has no control that asks for it).
+export class GuestOnly extends Error {
+  constructor() { super("This isn't part of the shared news."); this.name = "GuestOnly"; this.code = "guest"; }
+}
+const PACES = ["relaxed", "normal", "fast"];
+// A guest's Reels choices: his auto-advance and pace to start with, then whatever they pick on their device.
+export function guestSettings(doc, local = {}) {
+  const pick = (s) => {
+    const o = obj(s);
+    return { ...(typeof o.auto_advance === "boolean" ? { auto_advance: o.auto_advance } : {}), ...(PACES.includes(o.pace) ? { pace: o.pace } : {}) };
+  };
+  const s = { auto_advance: true, pace: "normal", ...pick(doc?.reels?.settings), ...pick(local.settings) };
+  return { topics_off: [], auto_advance: s.auto_advance, pace: s.pace, resume: true, clips: true, channels: [] };
+}
+
+// GET for a guest: MK News and Reels from news.json; their own seen reels and choices from this device.
+export function guestRead(doc, path, local = {}) {
+  const { route, q } = query(path);
+  const news = doc.news;
+  switch (route) {
+    case "/api/news/feed": {
+      let items = news.feed;
+      if (q.kind) items = items.filter((x) => x.kind === q.kind);
+      if (q.tag) items = items.filter((x) => (x.tags || []).includes(q.tag));
+      return { items: items.slice(0, Number(q.limit || 80)) };
+    }
+    case "/api/news/charts": return news.charts;
+    case "/api/news/status": return { last: news.status.last, refreshing: false };
+    case "/api/news/repos": return { items: (news.repos[q.list || "today"] || []).slice(0, Number(q.limit || 25)) };
+    case "/api/news/saved": return { items: [] };
+    case "/api/reels": {
+      const seen = new Set(local.seen || []);
+      const items = doc.reels.items;
+      return { items, seen: items.map((r) => r.id).filter((id) => seen.has(id)), settings: guestSettings(doc, local),
+        topics: doc.reels.topics, total: items.length, lines: { pending: 0 }, clips: null, news: true };
+    }
+    case "/api/settings": return { reels: guestSettings(doc, local) };
+    default: throw new GuestOnly();
+  }
+}
+
+// POST for a guest: seen reels and Reels choices, on this device only. Nothing else is theirs to change.
+export function guestWrite(doc, path, body, local) {
+  const { route } = query(path);
+  if (route === "/api/reels/seen" || route === "/api/reels/reset") return backupWrite(route, body, local);
+  if (route === "/api/settings") {
+    const r = obj(body?.reels);
+    local.settings = { ...obj(local.settings), ...(typeof r.auto_advance === "boolean" ? { auto_advance: r.auto_advance } : {}),
+      ...(PACES.includes(r.pace) ? { pace: r.pace } : {}) };
+    return { reels: guestSettings(doc, local) };
+  }
+  throw new GuestOnly();
 }
