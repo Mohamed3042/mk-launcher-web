@@ -189,7 +189,7 @@ const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () =>
   setTheme: (v) => { localSet("theme", v); applyTheme(); },
   inside: { phone: isPhone, get: () => HR.readPref(globalThis.localStorage), set: (on) => HR.writePref(globalThis.localStorage, on) } }, reels);
 const host = createHost({ esc, g, toast });
-const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP,
+const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP, owner: source.OWNER,
   redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
 const MORE = [["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
 const views = {

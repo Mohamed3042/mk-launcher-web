@@ -2,14 +2,17 @@
 // The list ranks every film by the score of its best cuts (made by the library's own ranker, no AI); a film's sheet
 // is its backlog (what each part is about and how good it is) plus the ranked cuts to watch, tick and rename.
 // "Feature on the portfolio" saves the pick and publishes it; the steps show live. Rules without a DOM live in
-// cinema-rules.js. In the GitHub backup this page is read-only and every write control is grey.
+// cinema-rules.js. In the GitHub backup (the PC is off) ranking, cut ticks, previews and names stay on the PC and are grey;
+// choosing the featured film goes through GitHub instead: the button opens a new file on the portfolio's own public
+// repository (its gh-pages branch) with the pick typed in, he taps Commit changes, and a workflow there updates the site.
 import * as R from "./cinema-rules.js";
 
 export function createCinema(d) {
-  const { $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, redraw, localGet, localSet, backup } = d;
+  const { $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, redraw, localGet, localSet, backup, owner } = d;
   const C = {
     data: null, choices: [], at: 0, sig: "", loading: false, error: "", job: null, timer: null, seen: 0, dismissed: 0, finished: 0,
     sort: localGet("cinemaSort", "best"), product: localGet("cinemaProduct", "all"), sheet: null,
+    pub: null, pubAt: 0, pubBusy: false, gh: null, // backup only: the public site's own words, and the pick last sent to GitHub
   };
   const choiceOf = (key) => C.choices.find((c) => c.key === key);
   const filmName = (id) => {
@@ -54,9 +57,10 @@ export function createCinema(d) {
     const ids = backup ? [] : R.leadCuts(info, C.data, film).slice(0, R.MAX_CUTS);
     const thumbs = film && ids.length ? `<div class="cin-thumbs" aria-label="Cuts on the home">${ids.map((id) => `<img class="cin-thumb-s" src="${esc(R.thumbUrl(film, id))}" alt="" loading="lazy" decoding="async">`).join("")}</div>` : "";
     const facts = film ? ["Featured film", R.clock(film.seconds), info.item?.chapters ? `${info.item.chapters} chapters` : ""] : ["Built into the site"];
-    const wait = info.pending ? `<p class="cin-pending">${g("clock")}<span>You picked ${esc(filmName(info.picked))}. The site still shows this one for now.</span></p>` : "";
+    const wait = info.pending && !backup ? `<p class="cin-pending">${g("clock")}<span>You picked ${esc(filmName(info.picked))}. The site still shows this one for now.</span></p>` : "";
     const open = choice ? ` data-act="cin-open" data-key="${esc(choice.key)}" role="button" tabindex="0"` : "";
-    return `<div class="cin-lead${choice ? " tap" : ""}"${open}><div class="cin-lead-top">${film ? poster(film) : `<span class="cin-poster world">${g("globe")}</span>`}
+    const pic = film?.poster ? film : info.item?.card ? { poster: info.item.card } : film; // the backup has no library pictures, the public site's own card will do
+    return `<div class="cin-lead${choice ? " tap" : ""}"${open}><div class="cin-lead-top">${pic ? poster(pic) : `<span class="cin-poster world">${g("globe")}</span>`}
       <div class="cin-lead-text">${tag}<h3 dir="auto">${esc(info.name)}</h3><p class="cin-sub">${esc(facts.filter(Boolean).join(" · "))}</p></div></div>${thumbs}${wait}</div>`;
   }
   function liveSection() {
@@ -108,11 +112,11 @@ export function createCinema(d) {
     const rows = worlds.map((w) => {
       const id = w.id.replace(/^site:/, "");
       const on = now.every((x) => x === id);
-      const act = on ? `<span class="st up"><i></i>On now</span>` : backup ? greyBtn("cinema", "Use as home", "btn sm ghost")
-        : `<button class="btn sm ghost" type="button" data-act="cin-world" data-v="${esc(w.id)}"${C.job?.running ? " disabled" : ""}>Use as home</button>`;
+      const act = on ? `<span class="st up"><i></i>On now</span>`
+        : `<button class="btn sm ghost" type="button" data-act="${backup ? "cin-gh-world" : "cin-world"}" data-v="${esc(w.id)}"${C.job?.running ? " disabled" : ""}>Use as home</button>`;
       return `<div class="row cin-world"><span class="cin-poster world">${g("globe")}</span><div class="main"><div class="name">${esc(w.name)}</div><div class="sub">Built into the portfolio, no film</div></div><div class="end">${act}</div></div>`;
     }).join("");
-    return wrapSection("cin-worlds", "Site worlds", "go back to a built-in home", "", `<div class="rows">${rows}</div>`);
+    return wrapSection("cin-worlds", "Site worlds", "go back to a built-in home", "", `<div class="rows">${rows}</div>${backup ? `<div class="cin-ghslot" aria-live="polite">${ghNote("worlds")}</div>` : ""}`);
   }
 
   // ---------- one film ----------
@@ -230,7 +234,7 @@ export function createCinema(d) {
     const twins = [...new Set(Object.values(lead))].map((id) => payload(id));
     const twinUnranked = twins.some((t) => t && !t.ranked);
     const old = f?.outdated ? `<p class="cin-bar-note">${g("alert")}<span>This film changed since it was ranked. <button class="link-btn" type="button" data-act="cin-rank" data-film="${esc(m.id)}" data-force="1"${busy || !tools().rank ? " disabled" : ""}>Rank again</button></span></p>` : "";
-    if (backup) return `${greyBtn("cinema", `${g("film")}Feature on the portfolio`, "btn primary wide")}<p class="cin-bar-note">The backlog, previews and publishing live on your PC.</p>`;
+    if (backup) return ghBar(c);
     if (!f || s.loading) return `<div class="skeleton" style="height:48px"></div>`;
     if (!f.ranked) {
       return `<button class="btn primary wide" type="button" data-act="cin-rank" data-film="${esc(m.id)}"${busy || !tools().rank ? " disabled" : ""}>${g("sparkles")}Rank cuts</button>
@@ -326,6 +330,73 @@ export function createCinema(d) {
     input.addEventListener("blur", () => done(true));
   }
 
+  // ---------- the GitHub path (backup only: the PC is off) ----------
+  // A tap opens github.com on a new file in the portfolio's repository (gh-pages, program-requests/) with the pick typed in;
+  // he taps Commit changes there. The request file is named by the time of the tap, so the newest tap is the pick that wins.
+  // The repository is read off the snapshot's site address (this page names no portfolio), in the shell's own owner's case.
+  const ghRepo = () => R.portfolioRepo(C.data?.site, owner);
+  const GH_NOTE = "GitHub opens with your pick ready. Tap Commit changes; the site updates in about 10 minutes.";
+  // The note after a tap, in the place that tapped (`scope`: "sheet:<film key>" or "worlds"), with the two ways out.
+  function ghNote(scope) {
+    const sent = C.gh;
+    if (!sent || sent.scope !== scope) return "";
+    return `<div class="cin-gh" role="status"><p class="cin-bar-note">${g("github")}<span>${esc(GH_NOTE)}</span></p>
+      <div class="cin-gh-links"><a class="link-btn" href="${esc(sent.req.url)}" target="_blank" rel="noopener noreferrer">Open GitHub again</a>
+      <button class="link-btn" type="button" data-act="cin-gh-copy">Copy the pick</button></div></div>`;
+  }
+  function ghBar(c) {
+    const lead = R.leadFor(c);
+    const block = R.githubBlock(lead, C.data.films, ghRepo());
+    const label = ["en", "ar"].some((l) => R.leadInfo(l, C.data)?.id === lead[l]) ? "Update the portfolio" : "Feature on the portfolio";
+    if (block) return `<button class="btn primary wide needs-pc" type="button" data-act="cin-gh-blocked" aria-disabled="true">${g("film")}${label}</button><p class="cin-bar-note">${g("alert")}<span>${esc(block)}</span></p>`;
+    const sent = ghNote(`sheet:${c.key}`);
+    return `<button class="btn primary wide" type="button" data-act="cin-gh-feature">${g("github")}${label}</button>
+      ${sent || `<p class="cin-bar-note">This goes through GitHub, so it works with your PC off. It keeps the cuts you last chose, or the film's best five.</p>`}`;
+  }
+  function sendToGitHub(lead, scope) {
+    let req;
+    try { req = R.githubRequest(lead, Date.now(), C.data.films, ghRepo()); } catch (e) { toast(e.message); return; }
+    C.gh = { scope, req };
+    const tab = window.open(req.url, "_blank"); // inside the tap, so no pop-up blocker minds
+    if (tab) tab.opener = null; else toast("Your browser blocked the new tab. Tap Open GitHub below.");
+    if (scope === "worlds") { const slot = $(".cin-ghslot"); if (slot) slot.innerHTML = ghNote(scope); } else paintBar();
+  }
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return true; } catch { /* not allowed here: try the old way */ }
+    try {
+      const t = document.createElement("textarea");
+      t.value = text; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(t); t.select();
+      const ok = document.execCommand("copy");
+      t.remove();
+      return ok;
+    } catch { return false; }
+  }
+  // Fallback: the pick goes on the clipboard and GitHub opens the same new file with the box empty, to paste into.
+  function copyPick() {
+    const req = C.gh?.req;
+    if (!req) return;
+    const copied = copyText(req.json); // started inside the tap, like the tab below
+    const tab = window.open(req.bare, "_blank");
+    if (tab) tab.opener = null;
+    copied.then((ok) => toast(ok ? "Copied. Paste it into the box on GitHub." : "Couldn't copy. Use Open GitHub again instead."));
+  }
+  // What the public site shows now. The PC can't tell us, so the page asks the site itself (no key) and falls back to the snapshot.
+  const applyPublic = () => { if (backup && C.pub && C.data?.available) C.data = { ...C.data, live: C.pub }; };
+  async function pullPublic() {
+    if (!backup || C.pubBusy) return;
+    C.pubBusy = true;
+    try {
+      const live = await R.fetchPublicLive((url, opts) => fetch(url, opts), R.portfolioBase(C.data?.site));
+      C.pubAt = Date.now();
+      if (!live.ok) return;
+      const changed = JSON.stringify(live) !== JSON.stringify(C.pub);
+      C.pub = live;
+      applyPublic();
+      if (changed) { redraw(); paintBar(); } // the sheet's button says Update or Feature by what is live
+    } finally { C.pubBusy = false; }
+  }
+
   // ---------- doing things ----------
   function pickBody(c) {
     const lead = R.leadFor(c);
@@ -385,8 +456,10 @@ export function createCinema(d) {
       const sig = JSON.stringify(data);
       const changed = sig !== C.sig;
       C.sig = sig; C.data = data; C.choices = R.pairFilms(data.films || []); C.at = Date.now(); C.error = "";
+      applyPublic();
       if (data.job) { C.job = data.job; if (data.job.running) C.seen = data.job.started; }
       if (changed || !quiet) redraw();
+      if (backup && data.available && Date.now() - C.pubAt > 60000) pullPublic(); // not awaited: the snapshot is already on screen
     } catch (e) {
       C.error = e.message;
       if (!C.data) redraw();
@@ -418,6 +491,10 @@ export function createCinema(d) {
       case "cin-world": startJob("/api/cinema/publish", { lead: { en: el.dataset.v, ar: el.dataset.v } }, "Changing your portfolio home"); break;
       case "cin-rank": startJob("/api/cinema/rank", { id: el.dataset.film, force: el.dataset.force === "1" }, "Finding the best cuts"); break;
       case "cin-rank-all": startJob("/api/cinema/rank", { all: true }, "Ranking the films"); break;
+      case "cin-gh-feature": sendToGitHub(R.leadFor(choiceOf(C.sheet.key)), `sheet:${C.sheet.key}`); break;
+      case "cin-gh-world": sendToGitHub({ en: el.dataset.v, ar: el.dataset.v }, "worlds"); break;
+      case "cin-gh-copy": copyPick(); break;
+      case "cin-gh-blocked": toast(R.githubBlock(R.leadFor(choiceOf(C.sheet.key)), C.data.films, ghRepo())); break;
       case "cin-dismiss": C.dismissed = C.job?.started || 0; paintJob(); paintBar(); break;
       default: break;
     }

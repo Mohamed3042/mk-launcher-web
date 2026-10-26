@@ -93,8 +93,11 @@ export function leadInfo(lang, data) {
   const film = (data.films || []).find((f) => f.id === id) || null;
   const world = (data.worlds || []).find((w) => norm(w.id) === id) || null;
   const item = data.live?.items?.[id] || null;
+  // The site is newer than his pick when a pick from GitHub came after it; his old pick is then history, not "on its way".
+  const mine = Date.parse(data.program?.updated), site = Date.parse(data.live?.updated);
+  const passed = Number.isFinite(mine) && Number.isFinite(site) && site > mine;
   return { lang, id, film, world, item, name: item?.name || world?.name || (film ? publicName(film.title) : id),
-    fromLive: !!live, pending: !!live && !!picked && live !== picked, picked };
+    fromLive: !!live, pending: !!live && !!picked && live !== picked && !passed, picked };
 }
 // The cut ids to show under a lead: the live ones, else what he ticked, else the film's auto picks.
 export function leadCuts(info, data, film) {
@@ -178,4 +181,122 @@ export function nameClash(name, worlds) {
   const key = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
   const k = key(name);
   return k ? (worlds || []).find((w) => key(w.title || w.name) === k) || null : null;
+}
+
+// ---------- phase 2: when the PC is off, GitHub changes the pick ----------
+// The backup can't reach the PC, so "Use as home" and "Feature on the portfolio" open github.com on a new file in the
+// portfolio's own public repository (program-requests/<time>.json on its gh-pages branch) with the pick already typed in.
+// He taps Commit changes; a workflow on that branch applies the newest request to the film library's program, cuts the
+// clips and updates the site. No token is kept in any browser.
+export const PORTFOLIO_BRANCH = "gh-pages";
+export const REQUESTS_DIR = "program-requests";
+const FILM_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
+const SITE_ID = /^site:[a-z0-9][a-z0-9-]{0,40}$/;
+const LIVE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,124}$/;
+const OWNER_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/;
+const REPO_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const REPO_PATH = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const NOT_A_REPO = new Set(["en", "ar"]); // the language folders: a site with no repository folder in its address
+
+// The portfolio's repository, read off the snapshot's site address (https://<owner>.github.io/<repo>/en/ -> "<Owner>/<repo>")
+// so the page names no portfolio of its own. `owner` is this shell's own GitHub login in the case GitHub shows it (the
+// address only has it in lower case); it has to match the address, so a portfolio on another account is never sent a
+// file. "" when the address isn't a GitHub Pages project site of that owner.
+export function portfolioRepo(site, owner) {
+  try {
+    const u = new URL(String(site));
+    const host = /^([a-z0-9-]+)\.github\.io$/.exec(u.hostname);
+    if (u.protocol !== "https:" || u.username || u.password || u.search || u.hash || !host) return "";
+    if (typeof owner !== "string" || !OWNER_NAME.test(owner) || owner.toLowerCase() !== host[1]) return "";
+    const repo = u.pathname.split("/")[1] || "";
+    return REPO_NAME.test(repo) && !NOT_A_REPO.has(repo) ? `${owner}/${repo}` : "";
+  } catch { return ""; }
+}
+
+// 2026-10-26 14:30:05 UTC -> "20261026T143005Z": names sort in time order, so the newest request is the last one
+export function requestStamp(now = Date.now()) {
+  const d = new Date(now), p = (n, w = 2) => String(n).padStart(w, "0");
+  return `${p(d.getUTCFullYear(), 4)}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+}
+
+// Why this pick can't go to GitHub ("" when it can). `repo` is the portfolio's "Owner/name" (portfolioRepo). `films` are
+// the snapshot's rows; leave them out to check the shape only.
+export function githubBlock(lead, films, repo) {
+  if (typeof repo !== "string" || !REPO_PATH.test(repo)) {
+    return "This copy can't tell which GitHub repository your portfolio lives in.";
+  }
+  const langs = ["en", "ar"];
+  for (const l of langs) {
+    const id = lead?.[l];
+    if (typeof id !== "string" || !(SITE_ID.test(id) || FILM_ID.test(id))) return "That pick can't be sent to GitHub.";
+  }
+  if (!films) return "";
+  for (const l of langs) {
+    const id = lead[l];
+    if (SITE_ID.test(id)) continue;
+    const f = films.find((x) => x.id === id);
+    if (!f) return "That film is not in the library.";
+    if (!f.cuts?.ranked) {
+      return lead.en !== lead.ar ? `Rank the ${l === "ar" ? "Arabic" : "English"} version on your PC first. Both languages need ranked cuts.`
+        : "Rank this film on your PC first. It needs ranked cuts before it can go on the portfolio.";
+    }
+  }
+  return "";
+}
+
+// The link to open: github.com's "new file" page on the portfolio's gh-pages branch, with the file name and its contents in
+// the address. `bare` is the same page with nothing typed in (the "Copy the pick" fallback pastes the contents). Throws the
+// reason when it can't be sent.
+export function githubRequest(lead, now = Date.now(), films, repo) {
+  const why = githubBlock(lead, films, repo);
+  if (why) throw new Error(why);
+  const json = JSON.stringify({ version: 1, lead: { en: lead.en, ar: lead.ar } }, null, 2) + "\n";
+  const filename = `${REQUESTS_DIR}/${requestStamp(now)}.json`;
+  const bare = `https://github.com/${repo}/new/${PORTFOLIO_BRANCH}?filename=${filename}`;
+  return { url: `${bare}&value=${encodeURIComponent(json)}`, bare, json, filename };
+}
+
+// ---------- what the public site shows now (the backup reads it itself, the PC is off) ----------
+const plain = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : null);
+// The portfolio's address comes from the snapshot (its `site` is the English home, https://host/<portfolio>/en/), never from
+// this file: the public shell carries no app links. "" when it isn't a plain https address.
+export function portfolioBase(site) {
+  try {
+    const u = new URL(String(site));
+    if (u.protocol !== "https:" || u.username || u.password || u.search || u.hash) return "";
+    return `${u.origin}${u.pathname.replace(/\/en\/?$/, "/")}`.replace(/\/?$/, "/");
+  } catch { return ""; }
+}
+// The same shape the PC's /api/cinema "live" has (core/cinema.py _fetch_live), so leadInfo reads either. Not usable -> {ok:false}.
+export function parseLive(data, base = "") {
+  const doc = plain(data);
+  if (!doc) return { ok: false };
+  const lead = {};
+  for (const l of ["en", "ar"]) if (typeof doc.lead?.[l] === "string" && LIVE_ID.test(doc.lead[l])) lead[l] = doc.lead[l];
+  if (!Object.keys(lead).length) return { ok: false };
+  if (doc.items !== undefined && !plain(doc.items)) return { ok: false };
+  const items = {};
+  for (const [key, it] of Object.entries(doc.items || {})) {
+    if (!LIVE_ID.test(key) || !plain(it)) continue;
+    let card = "";
+    try { card = it.card && base ? new URL(String(it.card), `${base}motion/`).href : ""; } catch { card = ""; }
+    const cuts = (Array.isArray(it.cuts) ? it.cuts : []).filter((c) => Number.isFinite(c?.start)).map((c) => ({
+      id: `t${String(Math.round(c.start * 10)).padStart(4, "0")}`, start: c.start, end: Number.isFinite(c.end) ? c.end : null,
+      label: cleanCopy(c.label, COPY_LIMITS.name), chapter: c.chapter ?? null }));
+    items[key] = { name: cleanCopy(it.name, COPY_LIMITS.name), kind: String(it.kind || ""), seconds: Number.isFinite(it.seconds) ? it.seconds : null,
+      version: String(it.version || ""), chapters: Array.isArray(it.chapters) ? it.chapters.length : 0, card: card.startsWith(base) ? card : "", cuts };
+  }
+  return { ok: true, updated: String(doc.updated || ""), lead, items };
+}
+
+// `fetchFn` is the browser's fetch (a test passes its own). The site is public: no key, no referrer, never cached.
+export async function fetchPublicLive(fetchFn, base, now = Date.now(), timeoutMs = 6000) {
+  if (!base) return { ok: false };
+  const ctl = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = setTimeout(() => ctl?.abort(), timeoutMs);
+  try {
+    const res = await fetchFn(`${base}motion/program.json?v=${Math.floor(now / 60000)}`,
+      { cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer", signal: ctl?.signal });
+    return res?.ok ? parseLive(await res.json(), base) : { ok: false };
+  } catch { return { ok: false }; } finally { clearTimeout(timer); }
 }

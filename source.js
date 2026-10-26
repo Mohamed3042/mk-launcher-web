@@ -13,6 +13,7 @@ export const MODE = R.chooseMode(meta("mkl-mode"));
 export const BACKUP = MODE === "backup";
 export const { REASON, NeedsPc, needsPc, bannerText, whenWords, clock, BACKUP_URL } = R;
 const REPO = meta("mkl-snapshot") || `Mohamed3042/${R.SNAPSHOT_REPO}`;
+export const OWNER = REPO.split("/")[0]; // his GitHub login, in the case GitHub shows it
 export const REPO_NAME = REPO.split("/").pop();
 const NEWS = `${I.REPO_OWNER}/${R.NEWS_REPO}`;
 const contents = (repo) => `https://api.github.com/repos/${repo}/contents/`;

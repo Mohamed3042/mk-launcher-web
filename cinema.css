@@ -171,6 +171,16 @@
 .cin-clash { margin-top: 10px; }
 .cin-clash:empty { display: none; }
 
+/* the GitHub path in the backup: what happened after the tap, and the two ways out */
+.cin-gh { display: grid; gap: 2px; }
+.cin-ghslot:empty { display: none; }
+.cin-ghslot { margin-top: 12px; padding: 12px 14px; border-radius: var(--r-panel); background: var(--panel); border: 1px solid var(--line); }
+.cin-ghslot .cin-bar-note { font-size: 13px; color: var(--ink-2); }
+.cin-gh-links { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.cin-gh-links .link-btn { display: inline-flex; align-items: center; min-height: 44px; margin: 0 -10px; }
+.cin-gh-links .link-btn + .link-btn { margin-left: 0; }
+.cin-gh .cin-bar-note svg.g { color: var(--ink-2); }
+
 /* the action bar stays in thumb reach while the cuts scroll */
 .cin-bar {
   position: sticky; bottom: 0; z-index: 4; margin: 18px calc(var(--padx) * -1) 0; padding: 12px var(--padx) calc(var(--safe-b) + 14px);
