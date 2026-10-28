@@ -1004,3 +1004,18 @@ a.pln-noted-row:hover { background: var(--hover); }
   content: ""; position: absolute; top: -4px; inset-inline-end: -4px; width: 10px; height: 10px; border-radius: 50%;
   background: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 10px var(--accent);
 }
+
+/* ---------- the map's colours (the owner's pick, 28 Oct 2026): "A, vivid" on a clean black room in the dark;
+   the same family a step deeper on Milk in the light. Each area takes the next one, in launch order. ---------- */
+.pln { --area-1: #22c55e; --area-2: #3b82f6; --area-3: #f59e0b; --area-4: #a855f7; --area-5: #ef4444; --area-6: #14b8a6; --area-7: #38bdf8; --area-8: #f472b6; --map-room: #0b0c0e; }
+@media (prefers-color-scheme: light) { :root:where(:not([data-theme="dark"])) .pln { --area-1: #16a34a; --area-2: #2563eb; --area-3: #d97706; --area-4: #9333ea; --area-5: #dc2626; --area-6: #0d9488; --area-7: #0284c7; --area-8: #db2777; --map-room: #f3eee6; } }
+:root[data-theme="light"] .pln { --area-1: #16a34a; --area-2: #2563eb; --area-3: #d97706; --area-4: #9333ea; --area-5: #dc2626; --area-6: #0d9488; --area-7: #0284c7; --area-8: #db2777; --map-room: #f3eee6; }
+.pln-mapv { background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 8%, transparent) 1px, transparent 1.4px) 0 0 / 22px 22px, var(--map-room); border-color: var(--line); }
+.pln-area { border-color: color-mix(in srgb, var(--a) 72%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--a) 16%, var(--map-room)), color-mix(in srgb, var(--a) 6%, var(--map-room)) 70%); }
+.pln-area[data-focus] { border-color: var(--a); }
+.pln-block { border-color: color-mix(in srgb, var(--a) 55%, transparent); background: color-mix(in srgb, var(--a) 8%, var(--map-room)); }
+.pln-step { background: var(--map-room); }
+.pln-mv-n, .pln-area-n { color: #0b0c0e; }
+/* the room around the map is a clean black, not the plan's amber light (dark only; Milk keeps its warmth) */
+@media (prefers-color-scheme: dark) { html.pln-maproom:not([data-theme="light"]) { --glow: #1b1f27 !important; } }
+html.pln-maproom[data-theme="dark"] { --glow: #1b1f27 !important; }

@@ -96,6 +96,7 @@ export function createPlans(d) {
 
   // ---------- the page ----------
   function render() {
+    document.documentElement.classList.remove("pln-maproom"); // planPage puts it back for the map view
     if (P.needsPc) return backupCard();
     if (!P.data) return P.error ? `${offlineBar()}${errorCard()}` : skeleton();
     const list = entries();
@@ -201,6 +202,7 @@ export function createPlans(d) {
     const accent = e.plan.accent || "#e9a54b";
     document.documentElement.style.setProperty("--glow", accent); // the room takes the plan's own light
     const empty = !e.plan.stops.length && !e.plan.layers.length;
+    document.documentElement.classList.toggle("pln-maproom", P.tab === R.VIEW); // the map's room is a clean black, not amber
     if (P.tab === R.VIEW) return `<div class="pln pln-mapmode" style="--plan:${esc(accent)}"${dirAttr()} data-tab="view">${toolbar(e)}${banners(e)}${empty || !e.plan.layers.length ? emptyPlan(e) : mapPage(e)}</div>`;
     const body = { overview: () => overview(e, empty), decisions: () => decisionsTab(e), money: () => moneyTab(e), map: () => mapTab(e),
       evidence: () => evidenceTab(e), where: () => whereTab(e) }[P.tab] || (() => overview(e, empty));
@@ -253,7 +255,7 @@ export function createPlans(d) {
 
   // ---------- the map view (the owner's concept, 28 Oct): one big map of areas linked by arrows in launch order; tap an
   // area, a block or a stop and its own map opens; Back goes up one level to the whole picture ----------
-  const HUES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s7)", "var(--s8)", "var(--s6)"];
+  const HUES = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `var(--area-${n})`); // plans.css: "A, vivid" in the dark, deeper on Milk
   const place = (i) => [2, 3, 4].map((c) => { const at = R.snakeAt(i, c); return `--r${c}:${at.r};--c${c}:${at.c}`; }).join(";");
   const FULL = '<svg class="g" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
   function mapPage(e) {
@@ -845,6 +847,7 @@ export function createPlans(d) {
   }
   function unmount() {
     clearInterval(P.timer); P.timer = null;
+    document.documentElement.classList.remove("pln-maproom");
     P.ro?.disconnect(); P.ro = null;
     leave();
   }
