@@ -78,6 +78,17 @@ const EN = {
   sync_error: "Plans couldn't sync from GitHub", sync_wait: "Syncing from GitHub…", sync_ok: "Synced from GitHub · {ago}", sync_last: "Last synced at {clock}.",
   sync_head: "GitHub {head} · checked {ago}", sync_folder: "Folder: {folder}", sync_short_ok: "Synced {ago}", sync_short_local: "This Mac · {ago}",
   justNow: "just now", minAgo: "{n} min ago", hAgo: "{n} h ago", dAgo: "{n} d ago", never: "never", syncingToast: "Syncing from GitHub…", readingToast: "Reading this Mac's plans folder",
+  req_tab: "Requirements", notes_tab: "Notes", files_tab: "Files", reqBtn: "Requirements", reqLabel: "Requirements of {what}",
+  addReq: "Add requirement", newReq: "New requirement", addIt: "Add", editIt: "Edit", saveIt: "Save", cancel: "Cancel",
+  markDone: "Mark as done", markOpen: "Mark as not done", removeReq: "Remove requirement", removeIt: "Remove", deleteIt: "Delete", openIt: "Open",
+  removeQ: "Remove requirement?", removeWhat: "This will remove “{what}” from {from}.", removePart: "Its notes go with it. GitHub keeps the old version.",
+  completed: "{a} / {b} completed", allDone: "All requirements done", doneWord: "Done", stepsOf: "{a} of {b} steps",
+  saving: "Saving…", saved: "Saved", notSaved: "Not saved", couldntSave: "Couldn't save: {why}", oneAtATime: "Wait a moment: the last change is still saving.",
+  noReqs: "No requirements yet.", noReqsHint: "Add what has to be true for this to be done.", noPartsHint: "Add the first part of this area.",
+  seeItsMap: "See its map", backTo: "Back to {name}", moreFor: "More for {what}", tickIt: "{what}: mark done", untickIt: "{what}: mark not done",
+  readOnly: "Edits are made in the launcher on your PC.", nothingNoted: "Nothing is noted for this yet.", inThisArea: "In this area",
+  errEmpty: "Write it first.", errStepLong: "A requirement is at most 60 characters.", errNameLong: "A name is at most 60 characters.",
+  errSteps: "A part holds at most 12 requirements.", errParts: "An area holds at most 20 parts.", errGone: "That isn't in the plan any more.", errBad: "That change didn't make sense.",
 };
 const AR = {
   plans: "الخطط", allPlans: "كل الخطط", lang: "English", langLabel: "اعرض الخطط بالإنجليزية",
@@ -130,6 +141,17 @@ const AR = {
   sync_error: "تعذّر تزامن الخطط مع GitHub", sync_wait: "جارٍ التزامن مع GitHub…", sync_ok: "متزامنة مع GitHub · {ago}", sync_last: "آخر تزامن الساعة {clock}.",
   sync_head: "GitHub {head} · فُحصت {ago}", sync_folder: "المجلد: {folder}", sync_short_ok: "متزامنة {ago}", sync_short_local: "هذا الماك · {ago}",
   justNow: "الآن", minAgo: "قبل {n}", hAgo: "قبل {n}", dAgo: "قبل {n}", never: "أبداً", syncingToast: "جارٍ التزامن مع GitHub…", readingToast: "جارٍ قراءة مجلد الخطط على هذا الماك",
+  req_tab: "المتطلبات", notes_tab: "ملاحظات", files_tab: "الملفات", reqBtn: "المتطلبات", reqLabel: "متطلبات {what}",
+  addReq: "أضف متطلباً", newReq: "متطلب جديد", addIt: "أضف", editIt: "تعديل", saveIt: "حفظ", cancel: "إلغاء",
+  markDone: "علّمه منجزاً", markOpen: "علّمه غير منجز", removeReq: "احذف المتطلب", removeIt: "احذف", deleteIt: "حذف", openIt: "افتح",
+  removeQ: "حذف المتطلب؟", removeWhat: "سيُحذف «{what}» من {from}.", removePart: "تُحذف ملاحظاته معه، ويحتفظ GitHub بالنسخة القديمة.",
+  completed: "{a} / {b} منجزة", allDone: "كل المتطلبات منجزة", doneWord: "تم", stepsOf: "{a} من {b} خطوات",
+  saving: "جارٍ الحفظ…", saved: "حُفظ", notSaved: "لم يُحفظ", couldntSave: "تعذّر الحفظ: {why}", oneAtATime: "لحظة: آخر تغيير ما زال يُحفظ.",
+  noReqs: "لا متطلبات بعد.", noReqsHint: "أضف ما يجب أن يتحقق ليكتمل هذا.", noPartsHint: "أضف أول جزء في هذه المنطقة.",
+  seeItsMap: "اعرض خريطته", backTo: "رجوع إلى {name}", moreFor: "خيارات «{what}»", tickIt: "{what}: علّمه منجزاً", untickIt: "{what}: علّمه غير منجز",
+  readOnly: "التعديل يتم من المشغّل على حاسوبك.", nothingNoted: "لا ملاحظات لهذا بعد.", inThisArea: "في هذه المنطقة",
+  errEmpty: "اكتبه أولاً.", errStepLong: "المتطلب 60 حرفاً على الأكثر.", errNameLong: "الاسم 60 حرفاً على الأكثر.",
+  errSteps: "الجزء يضم 12 متطلباً على الأكثر.", errParts: "المنطقة تضم 20 جزءاً على الأكثر.", errGone: "لم يعد هذا في الخطة.", errBad: "هذا التغيير غير مفهوم.",
 };
 export const TEXT = { en: EN, ar: AR };
 // t("of", {a: 2, b: 8}) -> "2 of 8". A missing Arabic line falls back to the English one, never to the key.
@@ -325,6 +347,37 @@ export function nextOf(entry) {
   const n = d?.needs_you?.[0];
   return n ? { text: n.title, note: n.ask, part: n.part, from: "needs" } : null;
 }
+
+// ---------- Today's focus on Home: each plan's next action, then what needs him ----------
+// An item's key follows its words: the PC keeps his ticks by key, and a reworded item starts unticked.
+export function focusKey(planId, partId, words) {
+  let h = 5381;
+  for (const ch of String(words)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+  return `${planId}|${partId || "next"}|${h.toString(36)}`;
+}
+const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+// Every plan's next action first, then what needs him in launch order; the first `max` of them. A tick is done:
+// struck through on the day he ticked it, then out of the list, so the next item moves up. {items, open: not ticked
+// among them, more: open items after them, morePlans: the plans those belong to}.
+export function focusItems(entries, ticks = {}, now = Date.now(), max = 3) {
+  const nexts = [], needs = [];
+  for (const e of entries || []) {
+    if (!e?.plan) continue;
+    const next = nextOf(e);
+    if (next?.text) nexts.push({ plan: e.id, part: next.part || "", text: next.text, sub: next.note || "", kind: "next" });
+    for (const n of e.derived?.needs_you || []) {
+      if (next?.part && n.part === next.part) continue;
+      needs.push({ plan: e.id, part: n.part, text: n.title, sub: n.ask || "", kind: "need" });
+    }
+  }
+  const live = [...nexts, ...needs].map((it) => {
+    const key = focusKey(it.plan, it.part, `${it.text}\n${it.sub}`), at = ticks?.[key];
+    return { ...it, key, done: !!at, today: !!at && sameDay(at * 1000, now) };
+  }).filter((it) => !it.done || it.today);
+  const items = live.slice(0, max).map(({ today, ...it }) => it);
+  const rest = live.slice(max).filter((it) => !it.done);
+  return { items, open: items.filter((it) => !it.done).length, more: rest.length, morePlans: [...new Set(rest.map((it) => it.plan))] };
+}
 // "Spec, PR #12 · Launch notes, 3 Mar" -> one row each, linked when the plan says where it lives.
 export function notedIn(source, sources = []) {
   const norm = (s) => String(s || "").toLowerCase().replace(/[^\p{L}\p{N}#]+/gu, " ").trim();
@@ -410,6 +463,163 @@ export function focusLayer(plan, next) {
   if (hit) return hit.layer.id;
   return (plan?.layers || []).find((l) => (l.parts || []).some((p) => p.status === "needs-you"))?.id || "";
 }
+
+// ---------- editing from the map: a part's requirements are its steps, an area's are its parts ----------
+// The same rules as core/plans.py apply_ops, run on the page's copy so the map moves at once; the PC applies them to
+// the plan file, commits and pushes, and its answer replaces this copy a moment later.
+export const LIMITS = { step: 60, title: 60, steps: 12, parts: 20 };
+export class EditError extends Error {
+  constructor(key, status = 400) { super(key); this.key = key; this.status = status; }
+}
+export const cleanText = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
+const fallback = (part) => (part.who === "you" || part.who === "both" ? "needs-you" : "not-built");
+// A part's status follows its steps: every step done makes it live (its old status kept in `was`); a step open again
+// brings that status back. A part with no steps keeps its status.
+function settle(part) {
+  const steps = part.steps || [];
+  if (steps.length && steps.every((s) => s.done)) {
+    if (part.status !== "live") { part.was = part.status; part.status = "live"; }
+  } else if (steps.length && part.status === "live") {
+    part.status = part.was || fallback(part);
+    delete part.was;
+  }
+}
+function reopen(part) {
+  part.status = part.was || fallback(part);
+  delete part.was;
+}
+function wanted(text, most, tooLong) {
+  const to = cleanText(text);
+  if (!to) throw new EditError("errEmpty");
+  if (to.length > most) throw new EditError(tooLong);
+  return to;
+}
+function stepAt(part, op) {
+  const steps = part.steps || [];
+  if (Number.isInteger(op.i) && steps[op.i]?.text === op.text) return op.i;
+  const i = steps.findIndex((s) => s.text === op.text);
+  if (i < 0) throw new EditError("errGone", 409);
+  return i;
+}
+// A new part's id, from its title: lowercase Latin letters and digits joined by hyphens, unique in the plan.
+export function partSlug(title, taken = new Set()) {
+  const base = String(title || "").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 50).replace(/-+$/, "") || "part";
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  return id;
+}
+function applyOne(plan, op, today) {
+  if (!op || typeof op !== "object") throw new EditError("errBad");
+  if (op.do === "part-add") {
+    const layer = (plan.layers || []).find((l) => l.id === op.layer);
+    if (!layer) throw new EditError("errGone", 409);
+    const title = wanted(op.to, LIMITS.title, "errNameLong");
+    if ((layer.parts || []).length >= LIMITS.parts) throw new EditError("errParts");
+    const taken = new Set((plan.layers || []).flatMap((l) => (l.parts || []).map((p) => p.id)));
+    const id = op.id || partSlug(title, taken); // the page names it, so its next edits reach it on the PC too
+    if (taken.has(id)) throw new EditError("errGone", 409);
+    (layer.parts ||= []).push({ id, title, status: "not-built", who: "both", summary: `Added from MK Launcher on ${longDate(today)}.`,
+      exists: [], missing: [], source: "", stop: null, ask: "", purpose: "", steps: [] });
+    return true;
+  }
+  const hit = findPart(plan, op.part);
+  if (!hit) throw new EditError("errGone", 409);
+  const { part, layer } = hit;
+  part.steps ||= [];
+  const steps = part.steps;
+  switch (op.do) {
+    case "step-done": {
+      const i = stepAt(part, op);
+      if (steps[i].done === !!op.done) return false;
+      steps[i].done = !!op.done;
+      settle(part);
+      return true;
+    }
+    case "step-edit": {
+      const i = stepAt(part, op), to = wanted(op.to, LIMITS.step, "errStepLong");
+      if (steps[i].text === to) return false;
+      steps[i].text = to;
+      return true;
+    }
+    case "step-remove":
+      steps.splice(stepAt(part, op), 1);
+      settle(part);
+      return true;
+    case "step-add": {
+      const to = wanted(op.to, LIMITS.step, "errStepLong");
+      if (steps.length >= LIMITS.steps) throw new EditError("errSteps");
+      steps.push({ text: to, done: false });
+      settle(part);
+      return true;
+    }
+    case "part-done": {
+      const all = steps.length > 0 && steps.every((s) => s.done);
+      if (op.done) {
+        if (part.status === "live" && (all || !steps.length)) return false;
+        steps.forEach((s) => { s.done = true; });
+        if (steps.length) settle(part);
+        else { part.was = part.status; part.status = "live"; }
+        return true;
+      }
+      if (part.status !== "live" && !all) return false;
+      if (all) steps[steps.length - 1].done = false;
+      if (part.status === "live") reopen(part);
+      return true;
+    }
+    case "part-edit": {
+      const to = wanted(op.to, LIMITS.title, "errNameLong");
+      if (part.title === to) return false;
+      part.title = to;
+      return true;
+    }
+    case "part-remove":
+      layer.parts.splice(layer.parts.indexOf(part), 1);
+      if (plan.next_action?.part === part.id) delete plan.next_action.part;
+      return true;
+    default:
+      throw new EditError("errBad");
+  }
+}
+// Apply ops in order to a plan as the page holds it (normalized); true when anything changed. Throws EditError.
+export function applyOps(plan, ops, today) {
+  let changed = false;
+  for (const op of ops || []) changed = applyOne(plan, op, today) || changed;
+  if (changed) plan.updated = today;
+  return changed;
+}
+// What the page counts from the parts, as core/plans.py derive does: the totals, what needs him in launch order and
+// the next action. The stops and decisions don't change with an edit, so the rest is kept.
+export function derive(plan, old = {}) {
+  const stops = plan.stops || [];
+  const rank = new Map(stops.map((s, i) => [s.n, i]));
+  const counts = Object.fromEntries(WORDS.status_order.map((k) => [k, 0]));
+  const needs = [], byStop = {};
+  (plan.layers || []).forEach((layer, li) => (layer.parts || []).forEach((part, pi) => {
+    counts[part.status] = (counts[part.status] || 0) + 1;
+    if (part.stop != null) (byStop[String(part.stop)] ||= []).push(part.id);
+    if (part.status === "needs-you") {
+      const ask = part.ask || (part.missing?.length ? part.missing[0] : part.summary);
+      needs.push({ at: [rank.has(part.stop) ? rank.get(part.stop) : stops.length, li, pi],
+        n: { part: part.id, title: part.title, layer: layer.name, ask, stop: part.stop ?? null, who: part.who } });
+    }
+  }));
+  needs.sort((a, b) => a.at[0] - b.at[0] || a.at[1] - b.at[1] || a.at[2] - b.at[2]);
+  const needsYou = needs.map((x) => x.n), na = plan.next_action;
+  const next = na ? { text: na.text, note: na.note || "", part: na.part ?? null, from: "plan" }
+    : needsYou.length ? { text: needsYou[0].title, note: needsYou[0].ask, part: needsYou[0].part, from: "needs" } : null;
+  return { ...old, counts, parts: Object.values(counts).reduce((a, b) => a + b, 0), needs_you: needsYou, by_stop: byStop, next };
+}
+// An area is done when it has parts and every one of them is live.
+export const areaDone = (layer) => (layer?.parts || []).length > 0 && layer.parts.every((p) => p.status === "live");
+// The rows of a checklist: a part's steps (done, the one being worked on, not started), or an area's parts.
+export function checklist(subject) {
+  if (subject?.kind === "layer") return (subject.layer.parts || []).map((part) => ({ key: `p:${part.id}`, id: part.id, text: part.title, done: part.status === "live", part }));
+  const st = steps(subject?.part);
+  return st.list.map((s, i) => ({ key: `s:${i}`, i, text: s.text, done: !!s.done, state: s.done ? "done" : i === st.current ? "now" : "todo" }));
+}
+// The plan can be edited here: the PC (or a Mac folder opened for editing) says so, and this is not an offline copy.
+export const canEdit = (data, { backup = false, cachedAt = 0 } = {}) => !backup && !cachedAt && !!data?.sync?.edit?.ok;
 
 // ---------- a new plan, made on GitHub ----------
 export function slugify(title) {

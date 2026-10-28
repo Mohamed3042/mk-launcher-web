@@ -19,13 +19,18 @@ const SHAPES = {
 };
 const si = (s, cls = "") => `<svg class="pln-si ${cls}" data-s="${s}" viewBox="0 0 16 16" aria-hidden="true">${SHAPES[s] || SHAPES["not-built"]}</svg>`;
 const CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.3 8.4l2.4 2.4 5-5.3"/></svg>';
+const TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M7.6 12.4l3 3 5.8-6.2"/></svg>';
 const TAB_EYE = { decisions: "eye_decisions", money: "eye_money", map: "eye_map", evidence: "eye_evidence", where: "eye_where" };
 
 export function createPlans(d) {
   const { $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup, redraw, liveOrigin } = d;
   const P = { data: null, error: "", needsPc: false, cachedAt: 0, loaded: false, timer: null, id: null, tab: "overview", sig: "",
     filter: localGet("plansFilter", "all"), expanded: localGet("plansExpanded", false), lang: R.langOf(localGet("plansLang", ""), globalThis.navigator?.language),
-    shown: null, baseline: new Set(), focus: null, view: localGet("plansView", "map"), node: "", depth: 0, zoom: 1, ro: null };
+    shown: null, baseline: new Set(), focus: null, view: localGet("plansView", "map"), node: "", depth: 0, zoom: 1, ro: null,
+    // editing: the part picked in the docked panel, its tab, what the side panel or sheet shows, the row being renamed,
+    // the open row menu, and the edits waiting to be saved by the PC (one plan at a time)
+    sel: "", rtab: "req", sheet: null, editing: null, menu: null, restore: null, swiped: 0,
+    q: { plan: "", ops: [], inflight: null, timer: 0, state: "", err: "", fade: 0 } };
   const t = (key, vars) => R.text(P.lang)(key, vars);
   const W = () => R.words(P.data, P.lang);
   const ar = () => P.lang === "ar";
@@ -35,14 +40,19 @@ export function createPlans(d) {
 
   // ---------- data ----------
   async function load() {
+    if (P.q.inflight || P.q.ops.length) return; // edits on their way: the PC's answer to them brings the fresh copy
     try {
       const data = await api("/api/plans");
+      if (P.q.inflight || P.q.ops.length) return; // he edited while this was loading
       // the page redraws only when a plan, its changes or the sync state change; the "N min ago" words update in place
       const sig = JSON.stringify([data.plans, data.sync?.state, data.sync?.source]);
       const fresh = sig !== P.sig || !P.loaded || P.needsPc || P.error || P.cachedAt;
+      const ticked = JSON.stringify(data.focus || {}) !== JSON.stringify(P.data?.focus || {}); // his other device ticked something
       P.error = ""; P.needsPc = false; P.cachedAt = 0; P.data = data; P.sig = sig; P.loaded = true;
+      P.base = structuredClone(data); // the PC's copy as it is, before any edit made on top of it
       localSet("plans", { data, at: Date.now() });
-      if (fresh) redraw(); else touch();
+      if (fresh) redraw();
+      else { touch(); if (ticked) paintFocus(); }
     } catch (e) {
       P.loaded = true;
       if (e.code === "needs-pc" || backup) P.needsPc = true;
@@ -179,22 +189,109 @@ export function createPlans(d) {
       <div class="pln-lib-grid">${cards}${make}</div></div>`;
   }
 
-  // The Plans rail on Home: each plan's progress, what needs him and its next action, one tap from the launcher.
+  // The Plans card on Home (the owner's Milk concept, 28 Oct 2026): each plan's ring, stops done, a bar and what needs
+  // him. Its next action lives in Today's focus, just below.
   function homeRail() {
     if (backup || !P.data) return "";
     const list = entries().filter((e) => e.plan);
     if (!list.length) return "";
     const cards = list.slice(0, 3).map((e) => {
-      const s = e.derived.stops, n = e.derived.needs_you.length, next = R.nextOf(e), ch = e.changes?.length || 0;
+      const s = e.derived.stops, n = e.derived.needs_you.length, ch = e.changes?.length || 0;
+      const pct = (k) => (s.total ? Math.min(100, (100 * k) / s.total) : 0).toFixed(1);
       return `<a class="pln-rc" href="${R.href(e.id)}" style="--plan:${esc(e.plan.accent)}">
         <span class="pln-rc-ring">${miniRing(s.done, s.now.length, s.total, 56)}<span class="num">${s.done}/${s.total}</span></span>
         <span class="pln-rc-main"><b class="pln-rc-title" dir="auto">${esc(e.plan.title)}</b>
-          <span class="pln-rc-meta">${esc(s.total ? `${s.done} of ${s.total} stops done` : "No stops yet")}${ch ? ` · <span class="pln-rc-ch">${ch} new since your last look</span>` : ""}</span>${miniLine(e)}</span>
-        <span class="pln-rc-need"><b class="num">${n}</b><span>${n === 1 ? "needs you" : "need you"}</span></span>
-        ${next ? `<span class="pln-rc-next"><small>Next action</small><b dir="auto">${esc(next.text)}</b></span>` : ""}${g("chevron-right", "pln-rc-go")}</a>`;
+          <span class="pln-rc-meta">${esc(s.total ? `${s.done} of ${s.total} stops done` : "No stops yet")}${ch ? ` · <span class="pln-rc-ch">${ch} new since your last look</span>` : ""}</span>
+          ${s.total ? `<span class="pln-rc-bar" aria-hidden="true"><i style="width:${pct(s.done)}%"></i><i class="now" style="width:${pct(s.now.length)}%"></i></span>` : ""}</span>
+        <span class="pln-rc-need"><b class="num">${n}</b><span>${si(n ? "needs-you" : "live")}${n === 1 ? "needs you" : n ? "need you" : "all clear"}</span></span>
+        <span class="pln-rc-go">${g("chevron-right")}</span></a>`;
     }).join("");
-    return `<section class="section pln-rail" style="--plan:${esc(list[0].plan.accent)}"><div class="section-head"><h2>Plans</h2><span class="meta">${list.length} plan${list.length === 1 ? "" : "s"}</span><span class="grow"></span><a class="link-btn" href="${R.href(R.LIBRARY)}">See all</a></div>
+    return `<section class="section pln-rail" style="--plan:${esc(list[0].plan.accent)}"><div class="section-head"><h2>Plans</h2><span class="grow"></span><a class="btn sm see-all" href="${R.href(R.LIBRARY)}">See all${g("arrow-right")}</a></div>
       <div class="pln-rail-list">${cards}${canMake() ? `<button type="button" class="pln-rc-new" data-act="pln-new">${g("plus")}<span><b>New plan</b><small>From the template</small></span></button>` : ""}</div></section>`;
+  }
+
+  // Today's focus on Home: each plan's next action, then what needs him, three at a time. A tick is kept on the PC,
+  // so the phone and the computer agree; it shows struck through on its day, then the next item moves up.
+  const tickLabel = (it) => `${it.done ? "Done today, tap to undo" : "Mark done"}: ${it.text}`;
+  const focusSub = (it) => (it.done ? "Done today" : it.sub);
+  // The count of today's open ones; "Done" once today's are ticked while more wait, "All done" when nothing is left.
+  const focusBadge = (f) => (f.open ? `<span class="focus-count num" title="${f.open} to do today">${f.open}<span class="sr"> to do</span></span>`
+    : `<span class="focus-count done">${CHECK}${f.more ? "Done" : "All done"}</span>`);
+  // What is left: one plan's opens everything that needs him there; several plans' opens the plans.
+  const focusFoot = (f) => (!f.more ? "" : f.morePlans.length === 1
+    ? `<button type="button" class="focus-more" data-act="pln-needs" data-plan="${esc(f.morePlans[0])}">${f.more} more need you${g("chevron-right")}</button>`
+    : `<a class="focus-more" href="${R.href(R.LIBRARY)}">${f.more} more across your plans${g("chevron-right")}</a>`);
+  function homeFocus() {
+    if (backup || !P.data) return "";
+    const f = R.focusItems(entries(), P.data.focus || {}, Date.now());
+    if (!f.items.length) return "";
+    const rows = f.items.map((it) => {
+      const words = `<b dir="auto">${esc(it.text)}</b><span dir="auto">${esc(focusSub(it))}</span>`;
+      const open = it.part ? `<button type="button" class="focus-text" data-act="pln-part" data-plan="${esc(it.plan)}" data-id="${esc(it.part)}">${words}</button>`
+        : `<a class="focus-text" href="${R.href(it.plan)}">${words}</a>`;
+      return `<li class="focus-item"${it.done ? " data-done" : ""}><button type="button" class="focus-tick" data-act="pln-focus" data-key="${esc(it.key)}" aria-pressed="${it.done}"
+        aria-label="${esc(tickLabel(it))}">${TICK}</button>${open}</li>`;
+    }).join("");
+    return `<section class="home-card focus" aria-labelledby="focus-h"><div class="home-card-head"><h2 id="focus-h">Today's focus</h2>${focusBadge(f)}</div>
+      <ul class="focus-list">${rows}</ul>${focusFoot(f)}</section>`;
+  }
+  // After a tick (here or on his other device): the same rows change in place, so focus and an open panel stay put;
+  // a different list (a new day, a changed plan) redraws the card and keeps focus on the same control.
+  function paintFocus() {
+    const card = $(".home-card.focus");
+    if (!card || !P.data) return;
+    const f = R.focusItems(entries(), P.data.focus || {}, Date.now());
+    const ticksEl = $$(".focus-tick", card);
+    if (f.items.length && ticksEl.length === f.items.length && ticksEl.every((b, i) => b.dataset.key === f.items[i].key)) {
+      f.items.forEach((it, i) => {
+        const b = ticksEl[i], li = b.closest(".focus-item"), span = li.querySelector(".focus-text span");
+        b.setAttribute("aria-pressed", String(it.done));
+        b.setAttribute("aria-label", tickLabel(it));
+        li.toggleAttribute("data-done", it.done);
+        if (span) span.textContent = focusSub(it);
+      });
+      $(".focus-count", card).outerHTML = focusBadge(f);
+      const foot = $(".focus-more", card), next = focusFoot(f);
+      if (foot && foot.outerHTML !== next) foot.outerHTML = next || "";
+      return;
+    }
+    const controls = () => $$("button, a", $(".home-card.focus") || document.createElement("i"));
+    const at = controls().indexOf(document.activeElement);
+    card.outerHTML = homeFocus();
+    if (at >= 0) controls()[at]?.focus({ preventScroll: true });
+  }
+  // The plans for Home's Recent activity: when each last changed.
+  const activityPlans = () => (backup ? [] : entries().filter((e) => e.plan).map((e) => ({ id: e.id, title: e.plan.title, changed_at: e.changed_at, accent: e.plan.accent })));
+  // One request per item at a time: a tap while one is out is kept, and the newest wish is sent when it returns. If the PC
+  // doesn't take it, the item shows what the PC last said.
+  const ticking = new Map(); // item key -> the state he wants
+  async function tick(el) {
+    const key = el.dataset.key;
+    if (!P.data) return;
+    const done = el.getAttribute("aria-pressed") !== "true";
+    const ticks = (P.data.focus ||= {});
+    let confirmed = ticks[key];
+    if (done) ticks[key] = Date.now() / 1000; else delete ticks[key]; // at once; the PC keeps it
+    paintFocus();
+    const busy = ticking.has(key);
+    ticking.set(key, done);
+    if (busy) return;
+    try {
+      for (let want = done; ;) {
+        const got = await post("/api/plans/focus", { key, done: want });
+        P.data.focus = got.focus;
+        confirmed = got.focus[key];
+        if (ticking.get(key) === want) break;
+        want = ticking.get(key); // he tapped again meanwhile
+        if (want) P.data.focus[key] = Date.now() / 1000; else delete P.data.focus[key];
+      }
+    } catch (err) {
+      if (confirmed === undefined) delete P.data.focus[key]; else P.data.focus[key] = confirmed;
+      toast(err.message);
+    } finally {
+      ticking.delete(key);
+      paintFocus();
+    }
   }
 
   // ---------- one plan ----------
@@ -280,20 +377,23 @@ export function createPlans(d) {
       <button type="button" class="icon-btn" data-act="pln-zoom" data-v="-1" aria-label="${esc(t("zoomOut"))}">${g("minus")}</button>
       <button type="button" class="icon-btn" data-act="pln-zoom" data-v="0" aria-label="${esc(t("recenter"))}">${g("rotate-ccw")}</button>
       ${document.fullscreenEnabled ? `<button type="button" class="icon-btn pln-mv-full" data-act="pln-full" aria-label="${esc(t("fullscreen"))}">${FULL}</button>` : ""}</div>`;
-    return `<section class="pln-mapv${motion}" data-level="${node.kind}">${nav}
+    const dock = node.kind === "layer" || node.kind === "part" ? dockHtml(e, node) : ""; // beside the map on a computer (CSS hides it on a phone)
+    return `<section class="pln-mapv${motion}${dock ? " has-dock" : ""}" data-level="${node.kind}"><div class="pln-mv-main">${nav}
       <header class="pln-mv-head">${level.badge}<div><h2 dir="auto">${esc(level.title)}</h2>${level.sub ? `<p>${level.sub}</p>` : ""}</div></header>${level.facts || ""}
-      <div class="pln-mv-port"><div class="pln-mv-sizer"><div class="pln-mv-zoomer">${level.flow}</div></div></div>${level.after || ""}${tools}</section>`;
+      <div class="pln-mv-port"><div class="pln-mv-sizer"><div class="pln-mv-zoomer">${level.flow}</div></div></div>${level.after || ""}${tools}</div>${dock}</section>`;
   }
   // A flow: nodes laid out like a snake (2 columns on a phone, 3 or 4 on a computer), dashed arrows drawn between the
   // nodes marked data-link once the page has its layout (drawLinks).
   const flow = (kind, nodes) => `<div class="pln-flow" data-kind="${kind}"><svg class="pln-links" aria-hidden="true"></svg>${nodes.join("")}</div>`;
   const statusMark = (part) => `<span class="pln-bmark" title="${esc(W().status[part.status])}">${si(part.status)}</span>`;
   function block(e, part, i, opts = {}) {
-    const words = W(), st = R.steps(part), hue = opts.hue || "var(--plan)";
+    const words = W(), st = R.steps(part), hue = part.status === "live" ? "var(--up)" : opts.hue || "var(--plan)"; // a done part is green, as on his boards
     const meta = opts.small ? "" : `<span class="pln-block-meta"><span class="pln-block-st" data-s="${part.status}">${esc(words.status[part.status])}</span>${st.total ? `<span class="pln-block-steps num">${esc(t("of", { a: st.done, b: st.total }))}</span>` : ""}</span>
       <small class="pln-block-where" dir="auto">${esc(opts.where || (part.stop != null ? t("stopShort", { n: part.stop }) : t("noStop")))} · ${esc(words.who[part.who])}</small>`;
     const moved = R.changedIds(e.changes).parts.has(part.id);
-    return `<a class="pln-fnode pln-block${opts.small ? " sm" : ""}" href="${R.mapHref(e.id, "part", part.id)}" style="${place(i)};--a:${hue}" data-s="${part.status}"${opts.link ? " data-link" : ""}${moved ? " data-changed" : ""}
+    // in an area's own map a block opens its requirements (the docked panel, or the sheet on a phone); elsewhere its map
+    const pick = opts.layer ? ` data-act="pln-block" data-id="${esc(part.id)}" data-layer="${esc(opts.layer)}"${P.sel === part.id ? ' aria-current="true"' : ""}` : "";
+    return `<a class="pln-fnode pln-block${opts.small ? " sm" : ""}" href="${R.mapHref(e.id, "part", part.id)}" style="${place(i)};--a:${hue}" data-s="${part.status}"${opts.link ? " data-link" : ""}${moved ? " data-changed" : ""}${pick}
       aria-label="${esc(`${part.title}: ${words.status[part.status]}${part.stop != null ? `. ${t("stopShort", { n: part.stop })}` : ""}`)}">
       <span class="pln-block-icon">${g(part.icon || opts.icon || "layers")}</span><span class="pln-block-t"><b dir="auto">${esc(part.title)}</b>${meta}${moved ? `<span class="sr">${esc(t("changedTag"))}</span>` : ""}</span>${statusMark(part)}${!opts.small && st.total ? fwd() : ""}</a>`;
   }
@@ -301,11 +401,12 @@ export function createPlans(d) {
     const p = e.plan, s = e.derived.stops, words = W(), n = e.derived.needs_you.length;
     const focus = R.focusLayer(p, R.nextOf(e));
     const areas = R.areaOrder(p).map(({ layer: l, n: num }, i, all) => {
-      const sum = R.layerSummary(l, words.status_order), needs = sum.counts["needs-you"] || 0, hue = HUES[(num - 1) % HUES.length];
+      const done = R.areaDone(l); // every part live: the area says Done by itself, in green
+      const sum = R.layerSummary(l, words.status_order), needs = sum.counts["needs-you"] || 0, hue = done ? "var(--up)" : HUES[(num - 1) % HUES.length];
       const blocks = R.byStop(l.parts).map((part, k) => block(e, part, k, { small: true, icon: l.icon, hue })).join("");
-      return `<div class="pln-fnode pln-area" style="${place(i)};--a:${hue}"${i < all.length - 1 ? " data-link" : ""}${l.id === focus ? " data-focus" : ""}>
-        <a class="pln-area-head" href="${R.mapHref(e.id, "layer", l.id)}"><span class="pln-area-n num">${num}</span>
-          <span class="pln-area-name"><b dir="auto">${esc(l.name)}</b><small>${si(needs ? "needs-you" : sum.live === sum.total && sum.total ? "live" : "not-built")}<span class="num">${esc(t("liveOf", { a: sum.live, b: sum.total }))}</span>${needs ? `<span class="pln-area-needs">${esc(t("mapNeeds", { n: needs }))}</span>` : ""}</small></span>${fwd()}</a>
+      return `<div class="pln-fnode pln-area" style="${place(i)};--a:${hue}"${i < all.length - 1 ? " data-link" : ""}${l.id === focus ? " data-focus" : ""}${done ? " data-done" : ""}>
+        <a class="pln-area-head" href="${R.mapHref(e.id, "layer", l.id)}"><span class="pln-area-n num">${done ? CHECK : num}</span>
+          <span class="pln-area-name"><b dir="auto">${esc(l.name)}</b><small>${si(done ? "live" : needs ? "needs-you" : "not-built")}${done ? `<span class="pln-area-done">${esc(t("doneWord"))}</span>` : ""}<span class="num">${esc(t("liveOf", { a: sum.live, b: sum.total }))}</span>${needs ? `<span class="pln-area-needs">${esc(t("mapNeeds", { n: needs }))}</span>` : ""}</small></span>${fwd()}</a>
         <div class="pln-area-blocks">${blocks}</div></div>`;
     });
     return { badge: `<span class="pln-mv-badge">${g("map")}</span>`, title: p.title,
@@ -315,11 +416,13 @@ export function createPlans(d) {
   function layerMap(e, id) {
     const order = R.areaOrder(e.plan), at = order.find((a) => a.layer.id === id);
     if (!at) return { badge: "", title: t("noParts"), flow: "" };
-    const l = at.layer, sum = R.layerSummary(l, W().status_order), hue = HUES[(at.n - 1) % HUES.length];
+    const l = at.layer, sum = R.layerSummary(l, W().status_order), done = R.areaDone(l), hue = done ? "var(--up)" : HUES[(at.n - 1) % HUES.length];
     const parts = R.byStop(l.parts);
-    const nodes = parts.map((part, i) => block(e, part, i, { icon: l.icon, hue, link: i < parts.length - 1 && part.stop != null && parts[i + 1].stop != null }));
-    return { badge: `<span class="pln-mv-n num" style="--a:${hue}">${at.n}</span>`, title: l.name,
-      sub: `${l.note ? `<span dir="auto">${esc(l.note)}</span> · ` : ""}${esc(t("liveOf", { a: sum.live, b: sum.total }))} · ${esc(t("tapBlock"))}`,
+    const nodes = parts.map((part, i) => block(e, part, i, { icon: l.icon, hue, layer: l.id, link: i < parts.length - 1 && part.stop != null && parts[i + 1].stop != null }));
+    const reqs = `<button type="button" class="pln-mv-reqbtn" data-act="pln-sheet-area" data-plan="${esc(e.id)}" data-id="${esc(l.id)}">${g("list")}<span>${esc(t("reqBtn"))}</span><span class="num">${esc(t("of", { a: sum.live, b: sum.total }))}</span>${fwd()}</button>`;
+    return { badge: `<span class="pln-mv-n num" style="--a:${hue}"${done ? " data-done" : ""}>${done ? CHECK : at.n}</span>`, title: l.name,
+      sub: `${l.note ? `<span dir="auto">${esc(l.note)}</span> · ` : ""}${done ? `<b class="pln-mv-done">${esc(t("allDone"))}</b> · ` : ""}${esc(t("liveOf", { a: sum.live, b: sum.total }))} · ${esc(t("tapBlock"))}`,
+      facts: `<div class="pln-mv-reqrow">${reqs}</div>`,
       flow: nodes.length ? flow("blocks", nodes) : `<p class="pln-line-empty">${esc(t("noParts"))}</p>` };
   }
   function stopMap(e, n) {
@@ -350,7 +453,7 @@ export function createPlans(d) {
     return { badge: `<span class="pln-mv-badge">${g(part.icon || layer.icon || "layers")}</span>`, title: part.title,
       sub: part.purpose ? `<span dir="auto">${esc(part.purpose)}</span>` : "",
       facts: `<div class="pln-facts pln-mv-facts"><span class="pln-badge" data-s="${part.status}">${si(part.status)}${esc(words.status[part.status])}</span>${whoChip(part.who)}${st.total ? `<span class="pln-mv-count num">${esc(t("tapStep", { n: st.total }))} · ${esc(t("of", { a: st.done, b: st.total }))}</span>` : ""}</div>`,
-      flow: body, after: `<div class="btns pln-mv-btns"><button type="button" class="btn primary" data-act="pln-part" data-plan="${esc(e.id)}" data-id="${esc(part.id)}">${g("file-text")}${esc(t("openDetails"))}</button></div>` };
+      flow: body, after: `<div class="btns pln-mv-btns"><button type="button" class="btn primary" data-act="pln-sheet-part" data-plan="${esc(e.id)}" data-id="${esc(part.id)}">${g("list")}${esc(t("reqBtn"))}${st.total ? `<span class="num pln-btn-count">${esc(t("of", { a: st.done, b: st.total }))}</span>` : ""}</button></div>` };
   }
   // The dashed arrows: from each node marked data-link to the next one, sideways in a row and curving down between
   // rows. Drawn in layout coordinates, so zooming (a transform) never moves them off their blocks.
@@ -391,6 +494,440 @@ export function createPlans(d) {
     }
     const pct = $(".pln-mv-pct");
     if (pct) pct.textContent = `${Math.round(P.zoom * 100)}%`;
+  }
+
+  // ---------- requirements (the owner's boards, 28 Oct): a part's steps, an area's parts, as a checklist he ticks,
+  // renames, removes and adds to. Beside the map on a computer (the dock), in the side panel or bottom sheet elsewhere
+  // (the sheet). A part turns live when its last requirement is done; an area says Done when every part is. ----------
+  const editable = () => R.canEdit(P.data, { backup, cachedAt: P.cachedAt });
+  function subjectOf(e, kind, id) {
+    const order = R.areaOrder(e.plan);
+    const hueOf = (lid) => { const n = order.find((a) => a.layer.id === lid)?.n || 1; return { n, hue: HUES[(n - 1) % HUES.length] }; };
+    if (kind === "layer") {
+      const layer = e.plan.layers.find((l) => l.id === id);
+      return layer ? { kind, layer, ...hueOf(id) } : null;
+    }
+    const hit = R.findPart(e.plan, id);
+    return hit ? { kind: "part", part: hit.part, layer: hit.layer, ...hueOf(hit.layer.id), ...(hit.part.status === "live" ? { hue: "var(--up)" } : {}) } : null;
+  }
+  const subjectId = (s) => (s.kind === "layer" ? s.layer.id : s.part.id);
+  const subjectName = (s) => (s.kind === "layer" ? s.layer.name : s.part.title);
+  function saveState() {
+    const s = P.q.state;
+    if (!s) return "";
+    const mark = s === "saving" ? '<i class="pln-save-spin" aria-hidden="true"></i>' : s === "saved" ? CHECK : g("alert");
+    return `<span class="pln-save" data-state="${s}" title="${esc(s === "error" ? P.q.err : "")}">${mark}<span>${esc(t(s === "saving" ? "saving" : s === "saved" ? "saved" : "notSaved"))}</span></span>`;
+  }
+  // The head: the part's glyph or the area's number (a check once done), its name and line, a status shape and word,
+  // "2 / 5 completed" and how saving goes.
+  function reqFacts(e, s) {
+    const words = W(), list = R.checklist(s), n = list.filter((x) => x.done).length;
+    let badge;
+    if (s.kind === "part") badge = `<span class="pln-badge" data-s="${s.part.status}">${si(s.part.status)}${esc(words.status[s.part.status])}</span>`;
+    else {
+      const needs = s.layer.parts.filter((p) => p.status === "needs-you").length;
+      badge = R.areaDone(s.layer) ? `<span class="pln-badge" data-s="live">${si("live")}${esc(t("doneWord"))}</span>`
+        : needs ? `<span class="pln-badge" data-s="needs-you">${si("needs-you")}${esc(t("mapNeeds", { n: needs }))}</span>`
+          : `<span class="pln-badge" data-s="not-built">${si("not-built")}${esc(t("liveOf", { a: n, b: list.length }))}</span>`;
+    }
+    return `<div class="pln-req-facts">${badge}${list.length ? `<span class="pln-req-count num">${esc(t("completed", { a: n, b: list.length }))}</span>` : ""}<span class="pln-save-slot" role="status">${saveState()}</span></div>`;
+  }
+  function reqMark(s) {
+    if (s.kind === "part") return `<span class="pln-req-icon" style="--a:${s.hue}">${g(s.part.icon || s.layer.icon || "layers")}</span>`;
+    const done = R.areaDone(s.layer);
+    return `<span class="pln-req-n num" style="--a:${s.hue}"${done ? " data-done" : ""}>${done ? CHECK : s.n}</span>`;
+  }
+  function reqAbout(s) {
+    if (s.kind === "layer") return s.layer.note || "";
+    return s.part.purpose || t("partOf", { layer: s.layer.name, at: s.layer.parts.indexOf(s.part) + 1, n: s.layer.parts.length });
+  }
+  const tabsOf = (s) => (s.kind === "layer" ? ["req", "notes"] : ["req", "notes", "files"]);
+  const tabNow = (s) => (tabsOf(s).includes(P.rtab) ? P.rtab : "req");
+  function reqTabs(s) {
+    const now = tabNow(s), count = R.checklist(s).length;
+    return `<div class="pln-req-tabs" role="tablist">${tabsOf(s).map((k) => `<button type="button" role="tab" class="pln-req-tab" data-act="pln-rtab" data-v="${k}" data-key="tab:${k}" aria-selected="${now === k}">${esc(t(`${k}_tab`))}${k === "req" && count ? `<span class="count num">${count}</span>` : ""}</button>`).join("")}</div>`;
+  }
+  function reqBody(e, s) {
+    const now = tabNow(s);
+    return `<div class="pln-req-body" role="tabpanel">${now === "notes" ? notesOf(e, s) : now === "files" ? filesOf(e, s) : checks(s)}</div>`;
+  }
+  const ckForm = (value, kind) => `<form class="pln-ck-form" data-kind="${kind}" novalidate><input class="pln-ck-input" name="t" type="text" maxlength="${R.LIMITS.step}" autocomplete="off" enterkeyhint="${kind === "add" ? "enter" : "done"}" dir="auto" value="${esc(value)}" placeholder="${esc(t("newReq"))}" aria-label="${esc(kind === "add" ? t("newReq") : t("editIt"))}">
+    <button type="submit" class="btn sm primary">${esc(t(kind === "add" ? "addIt" : "saveIt"))}</button><button type="button" class="icon-btn" data-act="pln-ck-cancel" aria-label="${esc(t("cancel"))}">${g("x")}</button></form>`;
+  function checks(s) {
+    const rows = R.checklist(s), can = editable(), words = W(), editing = P.editing;
+    const items = rows.map((r) => {
+      if (can && editing?.key === r.key) return `<li class="pln-ck editing" data-key="${r.key}">${ckForm(editing.draft ?? r.text, "save")}</li>`;
+      let state, sub;
+      if (s.kind === "layer") {
+        const st = R.steps(r.part);
+        state = r.done ? "done" : r.part.status;
+        sub = `<small class="pln-ck-sub"><span class="pln-ck-st" data-s="${r.part.status}">${si(r.part.status)}${esc(words.status[r.part.status])}</span>${st.total ? `<span class="num">${esc(t("stepsOf", { a: st.done, b: st.total }))}</span>` : ""}</small>`;
+      } else {
+        state = r.state;
+        sub = `<small class="pln-ck-sub">${esc({ done: t("st_done"), now: t("st_now"), todo: t("st_todo") }[r.state])}</small>`;
+      }
+      const box = `<button type="button" class="pln-ck-box" role="checkbox" aria-checked="${r.done}" data-act="pln-tick" data-key="${r.key}" aria-label="${esc(t(r.done ? "untickIt" : "tickIt", { what: r.text }))}"${can ? "" : " disabled"}>${CHECK}</button>`;
+      const label = `<span class="pln-ck-text" dir="auto">${esc(r.text)}</span>${sub}`;
+      const text = s.kind === "layer" ? `<button type="button" class="pln-ck-t" data-act="pln-open-row" data-key="${r.key}">${label}</button>` : `<span class="pln-ck-t">${label}</span>`;
+      const more = can ? `<button type="button" class="icon-btn pln-ck-more" data-act="pln-rowmenu" data-key="${r.key}" aria-haspopup="menu" aria-label="${esc(t("moreFor", { what: r.text }))}">${g("more")}</button>` : "";
+      const acts = can ? `<div class="pln-ck-acts"><button type="button" class="pln-ck-act" data-act="pln-redit" data-key="${r.key}" tabindex="-1">${g("pencil")}<span>${esc(t("editIt"))}</span></button><button type="button" class="pln-ck-act del" data-act="pln-rdel" data-key="${r.key}" tabindex="-1">${g("trash")}<span>${esc(t("deleteIt"))}</span></button></div>` : "";
+      return `<li class="pln-ck" data-state="${state}" data-key="${r.key}">${acts}<div class="pln-ck-row">${box}${text}${more}</div></li>`;
+    }).join("");
+    const empty = rows.length ? "" : `<p class="pln-ck-empty"><b>${esc(t("noReqs"))}</b>${can ? `<span>${esc(t(s.kind === "layer" ? "noPartsHint" : "noReqsHint"))}</span>` : ""}</p>`;
+    const add = !can ? `<p class="pln-ck-ro">${g("lock")}<span>${esc(t("readOnly"))}</span></p>`
+      : editing?.key === "new" ? `<div class="pln-ck-addrow" data-key="new">${ckForm(editing.draft ?? "", "add")}</div>`
+        : `<button type="button" class="pln-ck-add" data-act="pln-addreq" data-key="add">${g("plus")}<span>${esc(t("addReq"))}</span></button>`;
+    return `${empty}${rows.length ? `<ol class="pln-checks" aria-label="${esc(t("reqLabel", { what: subjectName(s) }))}">${items}</ol>` : ""}${add}`;
+  }
+  function notesOf(e, s) {
+    const words = W();
+    if (s.kind === "layer") {
+      const sum = R.layerSummary(s.layer, words.status_order);
+      const kinds = sum.kinds.map((k) => `<span class="pln-badge" data-s="${k}">${si(k)}<span class="num">${sum.counts[k]}</span> ${esc(words.status[k])}</span>`).join("");
+      return `${s.layer.note ? `<p class="pln-lead" dir="auto">${esc(s.layer.note)}</p>` : ""}${kinds ? `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("inThisArea"))}</h3><span class="meta num">${esc(t("liveOf", { a: sum.live, b: sum.total }))}</span></div><div class="pln-facts">${kinds}</div></section>` : `<p class="pln-line-empty">${esc(t("nothingNoted"))}</p>`}`;
+    }
+    const part = s.part, stop = part.stop != null ? e.plan.stops.find((x) => x.n === part.stop) : null;
+    return `<div class="pln-facts">${whoChip(part.who)}${stop ? `<button type="button" class="pln-stopref" data-act="pln-stop" data-plan="${esc(e.id)}" data-n="${stop.n}"><span class="pln-stopref-n num">${stop.n}</span><span dir="auto">${esc(stop.title)}</span> · ${esc(words.stop[stop.state])}</button>` : ""}</div>
+      <p class="pln-lead" dir="auto">${esc(part.summary)}</p>
+      ${part.exists.length ? `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("whatsDone"))}</h3><span class="meta num">${part.exists.length}</span></div>${listOf(part.exists, "ok")}</section>` : ""}
+      ${part.missing.length ? `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("whatsMissing"))}</h3><span class="meta num">${part.missing.length}</span></div>${listOf(part.missing, "miss")}</section>` : ""}`;
+  }
+  function filesOf(e, s) {
+    const noted = R.notedIn(s.part.source, e.plan.sources), file = R.partFileUrl(e, s.part.id);
+    const rows = noted.map((n) => (n.url ? `<a class="pln-noted-row" href="${esc(n.url)}" target="_blank" rel="noopener">${g("file-text")}<span dir="auto">${esc(n.text)}</span>${g("external")}</a>`
+      : `<div class="pln-noted-row">${g("file-text")}<span dir="auto">${esc(n.text)}</span></div>`));
+    if (file) rows.push(`<a class="pln-noted-row" href="${esc(file)}" target="_blank" rel="noopener" title="${esc(t("addNoteHint"))}">${g("github")}<span>${esc(t("planFile"))}</span>${g("external")}</a>`);
+    return rows.length ? `<section class="pln-psec first">${noted.length ? `<div class="pln-psec-head"><h3>${esc(t("notedIn"))}</h3></div>` : ""}<div class="pln-noted">${rows.join("")}</div></section>` : `<p class="pln-line-empty">${esc(t("nothingNoted"))}</p>`;
+  }
+  // The dock: the area's requirements (its parts), or the part picked on the map (its steps), beside the map.
+  function dockHtml(e, node) {
+    let s = node.kind === "part" ? subjectOf(e, "part", node.id) : P.sel ? subjectOf(e, "part", P.sel) : null;
+    if (node.kind === "layer" && (!s || s.layer.id !== node.id)) { P.sel = ""; s = subjectOf(e, "layer", node.id); }
+    if (!s) return "";
+    const up = node.kind === "layer" && s.kind === "part" ? `<button type="button" class="pln-req-up" data-act="pln-sel" data-id="">${g(ar() ? "chevron-right" : "chevron-left")}<span dir="auto">${esc(s.layer.name)}</span></button>` : "";
+    const map = node.kind === "layer" && s.kind === "part" ? `<a class="icon-btn pln-req-map" href="${R.mapHref(e.id, "part", s.part.id)}" aria-label="${esc(t("seeItsMap"))}" title="${esc(t("seeItsMap"))}">${g("map")}</a>` : "";
+    return `<aside class="pln-dock pln-req" data-req="${s.kind}" data-plan="${esc(e.id)}" data-id="${esc(subjectId(s))}" data-host="dock" aria-label="${esc(t("reqLabel", { what: subjectName(s) }))}">${up}
+      <header class="pln-req-head">${reqMark(s)}<div class="pln-req-hd"><h3 dir="auto">${esc(subjectName(s))}</h3>${reqAbout(s) ? `<p dir="auto">${esc(reqAbout(s))}</p>` : ""}</div>${map}</header>
+      ${reqFacts(e, s)}${reqTabs(s)}${reqBody(e, s)}</aside>`;
+  }
+  // The sheet: the same, in the launcher's side panel (List view, a computer) or bottom sheet (a phone).
+  function sheetHtml() {
+    const sh = P.sheet, e = sh && entryOf(sh.plan);
+    const s = e?.plan && subjectOf(e, sh.kind, sh.id);
+    if (!s) return "";
+    const up = sh.kind === "part" && sh.from ? `<button type="button" class="pln-req-up" data-act="pln-sheet-area" data-plan="${esc(e.id)}" data-id="${esc(sh.from)}">${g(ar() ? "chevron-right" : "chevron-left")}<span dir="auto">${esc(s.layer.name)}</span></button>` : "";
+    const map = s.kind === "part" && P.tab === R.VIEW && P.node !== `p.${s.part.id}` ? `<button type="button" class="icon-btn pln-req-map" data-act="pln-seemap" data-href="${esc(R.mapHref(e.id, "part", s.part.id))}" aria-label="${esc(t("seeItsMap"))}">${g("map")}</button>` : "";
+    const note = s.kind === "part" ? R.partFileUrl(e, s.part.id) : "";
+    const foot = s.kind === "part" ? `${note ? `<a class="btn pln-addnote" href="${esc(note)}" target="_blank" rel="noopener" title="${esc(t("addNoteHint"))}">${g("pencil")}${esc(t("addNote"))}</a>` : ""}
+      <button type="button" class="btn primary" data-act="pln-inplan" data-plan="${esc(e.id)}" data-id="${esc(s.part.id)}">${esc(t("openInPlan"))}${g(ar() ? "chevron-left" : "arrow-right")}</button>` : "";
+    return `<div class="pln-panel pln-req pln-req-sheet" data-req="${s.kind}" data-plan="${esc(e.id)}" data-id="${esc(subjectId(s))}" data-host="sheet"${dirAttr()} style="--plan:${esc(e.plan.accent)}">
+      <div class="panel-head pln-ph">${reqMark(s)}<div class="main">${up}<h2 dir="auto">${esc(subjectName(s))}</h2>${reqAbout(s) ? `<div class="about" dir="auto">${esc(reqAbout(s))}</div>` : ""}</div>${map}${closeBtn()}</div>
+      <div class="panel-body pln-pb">${reqFacts(e, s)}${reqTabs(s)}${reqBody(e, s)}</div>${foot ? `<div class="pln-pfoot">${foot}</div>` : ""}</div>`;
+  }
+  function openSheet(plan, kind, id, from = "") {
+    closeMenu();
+    P.sheet = { plan, kind, id, from }; P.rtab = "req"; P.editing = null;
+    const html = sheetHtml();
+    if (html) openPanel(html); else P.sheet = null;
+  }
+  function paintSheet() {
+    const el = $("#panel .pln-req-sheet");
+    if (!el || !P.sheet) { P.sheet = el ? P.sheet : null; return; }
+    const top = el.querySelector(".panel-body")?.scrollTop || 0, html = sheetHtml();
+    if (!html) { P.sheet = null; closePanel(); return; } // what it showed is gone from the plan
+    el.outerHTML = html;
+    const body = $("#panel .pln-req-sheet .panel-body");
+    if (body) body.scrollTop = top;
+    keepMenu();
+  }
+  const dockShown = () => !!$(".pln-dock") && getComputedStyle($(".pln-dock")).display !== "none";
+  // Where the action happened: the plan, the area or part the checklist belongs to, and the row.
+  function ctxOf(el) {
+    const box = el?.closest?.("[data-req]") || (P.menu && el?.closest?.(".pln-menu") ? P.menu : null);
+    const d = box?.dataset || box;
+    const e = d && entries().find((x) => x.id === d.plan);
+    const s = e?.plan && subjectOf(e, d.req || d.kind, d.id);
+    return s ? { e, s, host: d.host } : null;
+  }
+  const rowOf = (s, key) => R.checklist(s).find((r) => r.key === key) || null;
+  const opFor = (s, r, what, value) => (s.kind === "layer"
+    ? { tick: { do: "part-done", part: r?.id, done: !r?.done }, edit: { do: "part-edit", part: r?.id, to: value }, remove: { do: "part-remove", part: r?.id },
+      add: { do: "part-add", layer: s.layer.id, to: value, id: R.partSlug(R.cleanText(value), new Set(allPartIds())) } }
+    : { tick: { do: "step-done", part: s.part.id, i: r?.i, text: r?.text, done: !r?.done }, edit: { do: "step-edit", part: s.part.id, i: r?.i, text: r?.text, to: value }, remove: { do: "step-remove", part: s.part.id, i: r?.i, text: r?.text }, add: { do: "step-add", part: s.part.id, to: value } })[what];
+
+  // One edit: on the page's copy at once (the map, the counts, what needs him), then to the PC with the ones around it.
+  function edit(pid, op) {
+    if (P.q.plan && P.q.plan !== pid && (P.q.ops.length || P.q.inflight)) { toast(t("oneAtATime")); return false; }
+    const e = entries().find((x) => x.id === pid);
+    if (!e?.plan) return false;
+    let changed;
+    try { changed = R.applyOps(e.plan, [op], today()); } catch (err) { toast(err instanceof R.EditError ? t(err.key) : String(err.message || err)); return false; }
+    if (!changed) return true;
+    e.derived = R.derive(e.plan, e.derived);
+    P.q.plan = pid; P.q.ops.push(op); setSave("saving");
+    clearTimeout(P.q.timer); P.q.timer = setTimeout(() => flush(), 650);
+    return true;
+  }
+  async function flush(keepalive = false) {
+    clearTimeout(P.q.timer); P.q.timer = 0;
+    if (!P.q.ops.length) return;
+    if (keepalive) { // the page is going away: send what waits now, even behind a save still on its way (the PC takes them in turn)
+      const pid = P.q.plan, ops = P.q.ops.splice(0, 20);
+      api("/api/plans/edit", { method: "POST", body: JSON.stringify({ id: pid, ops }), keepalive: true })
+        .then((res) => { if (res?.plans && !P.q.inflight && !P.q.ops.length) { adopt(res.plans); setSave("saved"); refresh(); } })
+        .catch((err) => { if (!P.q.inflight) failed(err); });
+      return;
+    }
+    if (P.q.inflight) return;
+    const pid = P.q.plan, ops = P.q.ops.splice(0, 20); // the PC takes 20 at a time; the rest follow
+    P.q.inflight = ops;
+    try {
+      const res = await api("/api/plans/edit", { method: "POST", body: JSON.stringify({ id: pid, ops }), keepalive });
+      P.q.inflight = null;
+      if (res?.plans) adopt(res.plans);
+      const e = entries().find((x) => x.id === pid);
+      if (P.q.ops.length && e?.plan) { // what he did meanwhile goes on top of the PC's answer, all of it or none
+        const mine = structuredClone(e.plan);
+        try { R.applyOps(mine, P.q.ops, today()); } catch (err) { P.q.ops = []; return failed(err); }
+        e.plan = mine; e.derived = R.derive(mine, e.derived);
+      }
+      setSave(P.q.ops.length ? "saving" : "saved");
+      if (P.q.ops.length) P.q.timer = setTimeout(() => flush(), 250);
+      refresh();
+    } catch (err) {
+      P.q.inflight = null; P.q.ops = [];
+      failed(err);
+    }
+  }
+  // A save that didn't land: say so, and show the PC's last copy again, never his unsaved changes as if they were saved.
+  async function failed(err) {
+    P.q.err = (err instanceof R.EditError ? t(err.key) : err?.message) || "";
+    setSave("error");
+    toast(t("couldntSave", { why: P.q.err }));
+    if (P.base) P.data = structuredClone(P.base);
+    P.sig = "";
+    await load();
+    if (!P.q.inflight && !P.q.ops.length) refresh();
+  }
+  function adopt(data) {
+    P.data = data; P.sig = JSON.stringify([data.plans, data.sync?.state, data.sync?.source]); P.loaded = true;
+    P.base = structuredClone(data); // the PC's copy as it is, before any edit made on top of it
+    localSet("plans", { data, at: Date.now() });
+  }
+  const allPartIds = () => (current()?.plan?.layers || []).flatMap((l) => l.parts.map((x) => x.id));
+  function setSave(state) {
+    P.q.state = state;
+    clearTimeout(P.q.fade);
+    if (state === "saved") P.q.fade = setTimeout(() => { P.q.state = ""; $$(".pln-save-slot").forEach((el) => { el.innerHTML = ""; }); }, 2600);
+    $$(".pln-save-slot").forEach((el) => { el.innerHTML = saveState(); });
+  }
+  // Draw the page and the sheet again after an edit, keeping the focus where he was.
+  function refresh(restore) {
+    const a = document.activeElement;
+    const key = a?.closest?.("[data-key]")?.dataset.key, host = a?.closest?.("[data-host]")?.dataset.host;
+    P.restore = restore || (key || P.editing ? { key, host: host || P.editing?.host } : null);
+    paintSheet();
+    redraw(); // mount() puts the focus back in the dock
+    if (P.restore?.host === "sheet") putFocus();
+  }
+  function putFocus() {
+    const r = P.restore;
+    P.restore = null;
+    const root = $(r?.host === "sheet" ? "#panel .pln-req-sheet" : ".pln-dock");
+    if (!root) return;
+    const input = root.querySelector(".pln-ck-input");
+    if (P.editing && input) {
+      input.focus({ preventScroll: true });
+      const at = Math.min(P.editing.caret ?? input.value.length, input.value.length);
+      input.setSelectionRange?.(at, at);
+      return;
+    }
+    const el = r?.key && root.querySelector(`[data-key="${CSS.escape(r.key)}"]`);
+    const target = el ? (el.matches("button, a, input") ? el : el.querySelector(".pln-ck-box")) : root.querySelector(".pln-ck-box, .pln-ck-add");
+    target?.focus({ preventScroll: true });
+  }
+  function repaint(host) {
+    if (host === "sheet") { paintSheet(); P.restore = { host: "sheet" }; putFocus(); } else refresh();
+  }
+
+  // ---------- a row's menu (⋯), the remove confirm, and swiping a row on a phone ----------
+  function keepMenu() { // the panel was drawn again: the menu stays, on its row's new ⋯
+    if (!P.menu || P.menu.btn?.isConnected) return;
+    const b = $(`[data-host="${P.menu.host}"] .pln-ck-more[data-key="${CSS.escape(P.menu.key)}"]`);
+    if (b) P.menu.btn = b; else closeMenu();
+  }
+  function closeMenu() {
+    $$(".pln-menu").forEach((m) => m.remove());
+    document.removeEventListener("pointerdown", menuOutside, true);
+    P.menu = null;
+  }
+  function menuOutside(ev) { if (!ev.target.closest?.(".pln-menu, .pln-ck-more")) closeMenu(); }
+  function openMenu(btn) {
+    const was = P.menu?.key === btn.dataset.key && P.menu?.host === btn.closest("[data-host]")?.dataset.host;
+    closeMenu();
+    if (was) return; // a second tap on ⋯ closes it
+    const c = ctxOf(btn), r = c && rowOf(c.s, btn.dataset.key);
+    if (!r) return;
+    P.menu = { plan: c.e.id, kind: c.s.kind, id: subjectId(c.s), host: c.host, key: r.key, btn };
+    const item = (act, glyph, label, cls = "") => `<button type="button" role="menuitem" class="pln-menu-it ${cls}" data-act="${act}" tabindex="-1">${g(glyph)}<span>${esc(label)}</span></button>`;
+    const m = document.createElement("div");
+    m.className = "pln-menu";
+    m.setAttribute("role", "menu");
+    m.setAttribute("aria-label", t("moreFor", { what: r.text }));
+    m.dir = ar() ? "rtl" : "ltr";
+    m.style.setProperty("--plan", c.e.plan.accent || "#e9a54b");
+    m.innerHTML = (c.s.kind === "layer" ? item("pln-m-open", "chevron-right", t("openIt")) : "") + item("pln-m-edit", "pencil", t("editIt"))
+      + item("pln-m-done", r.done ? "rotate-ccw" : "check", t(r.done ? "markOpen" : "markDone")) + item("pln-m-remove", "trash", t("removeReq"), "del");
+    document.body.appendChild(m);
+    const b = btn.getBoundingClientRect();
+    const top = b.bottom + 6 + m.offsetHeight > innerHeight - 8 ? b.top - 6 - m.offsetHeight : b.bottom + 6;
+    m.style.top = `${Math.max(8, top)}px`;
+    m.style.left = `${Math.min(innerWidth - m.offsetWidth - 8, Math.max(8, ar() ? b.left : b.right - m.offsetWidth))}px`;
+    m.addEventListener("keydown", (ev) => {
+      const its = [...m.querySelectorAll(".pln-menu-it")], at = its.indexOf(document.activeElement);
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") { ev.preventDefault(); its[(at + (ev.key === "ArrowDown" ? 1 : its.length - 1)) % its.length]?.focus(); }
+      else if (ev.key === "Escape" || ev.key === "Tab") { ev.preventDefault(); ev.stopPropagation(); const back = P.menu?.btn; closeMenu(); back?.focus(); }
+    });
+    document.addEventListener("pointerdown", menuOutside, true);
+    m.querySelector(".pln-menu-it")?.focus();
+  }
+  // "Remove requirement?": a small card in the middle; Escape or a tap outside is Cancel.
+  function confirmRemove(what, from, extra, back) {
+    return new Promise((resolve) => {
+      const box = document.createElement("div");
+      box.className = "pln-confirm";
+      box.dir = ar() ? "rtl" : "ltr";
+      box.lang = ar() ? "ar" : "en";
+      box.innerHTML = `<div class="pln-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="pln-cf-h" aria-describedby="pln-cf-p">
+        <span class="pln-confirm-icon">${g("trash")}</span><h3 id="pln-cf-h">${esc(t("removeQ"))}</h3>
+        <p id="pln-cf-p">${esc(t("removeWhat", { what, from }))}${extra ? ` ${esc(extra)}` : ""}</p>
+        <div class="pln-confirm-btns"><button type="button" class="btn pln-btn-del" data-v="yes">${esc(t("removeIt"))}</button><button type="button" class="btn ghost" data-v="no">${esc(t("cancel"))}</button></div></div>`;
+      const keys = (ev) => {
+        if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); done(false); return; }
+        if (ev.key !== "Tab") return;
+        const btns = [...box.querySelectorAll("button")], at = btns.indexOf(document.activeElement);
+        ev.preventDefault();
+        btns[(at + (ev.shiftKey ? btns.length - 1 : 1)) % btns.length].focus();
+      };
+      const done = (yes) => {
+        document.removeEventListener("keydown", keys, true);
+        box.classList.remove("on");
+        setTimeout(() => box.remove(), 160);
+        if (!yes) back?.()?.focus?.({ preventScroll: true }); // Cancel: back to the row's ⋯
+        resolve(yes);
+      };
+      box.addEventListener("click", (ev) => {
+        const b = ev.target.closest("button[data-v]");
+        if (b) { ev.stopPropagation(); done(b.dataset.v === "yes"); } else if (ev.target === box) done(false);
+      });
+      document.addEventListener("keydown", keys, true);
+      document.body.appendChild(box);
+      requestAnimationFrame(() => box.classList.add("on"));
+      box.querySelector('[data-v="no"]').focus();
+    });
+  }
+  async function removeRow(c, r) {
+    const pid = c.e.id, kind = c.s.kind, sid = subjectId(c.s), key = r.key;
+    const more = () => $(`[data-host="${c.host}"] .pln-ck-more[data-key="${CSS.escape(key)}"]`);
+    const yes = await confirmRemove(r.text, kind === "layer" ? c.s.layer.name : c.s.part.title, kind === "layer" ? t("removePart") : "", more);
+    if (!yes) return;
+    const e = entries().find((x) => x.id === pid), s = e?.plan && subjectOf(e, kind, sid), row = s && rowOf(s, key);
+    if (!row || row.text !== r.text) { toast(t("errGone")); return; } // the plan moved on while he was deciding
+    if (kind === "layer" && P.sel === row.id) P.sel = "";
+    if (P.sheet?.kind === "part" && P.sheet.id === row.id) P.sheet = { plan: pid, kind: "layer", id: sid };
+    const rows = R.checklist(s), at = rows.findIndex((x) => x.key === key);
+    const next = kind === "layer" ? rows[at + 1]?.key || rows[at - 1]?.key : at < rows.length - 1 ? `s:${at}` : at > 0 ? `s:${at - 1}` : "";
+    if (edit(pid, opFor(s, row, "remove"))) refresh({ host: c.host, key: next || "add" });
+  }
+  function startEdit(c, key) {
+    P.editing = { key, host: c.host };
+    repaint(c.host);
+  }
+  // Swiping a row sideways shows Edit and Delete under it (touch only; a mouse uses ⋯).
+  let swipe = null;
+  function closeSwipes(except) {
+    $$(".pln-ck[data-open]").forEach((li) => {
+      if (li === except) return;
+      li.removeAttribute("data-open");
+      const row = li.querySelector(".pln-ck-row");
+      if (row) row.style.transform = "";
+      li.querySelectorAll(".pln-ck-act").forEach((b) => { b.tabIndex = -1; });
+    });
+  }
+  function swipeStart(ev) {
+    const row = ev.target.closest?.(".pln-ck-row");
+    if (!row) { if (!ev.target.closest?.(".pln-ck-acts")) closeSwipes(); return; }
+    const li = row.parentElement;
+    closeSwipes(li);
+    if (ev.pointerType === "mouse" || !li.querySelector(".pln-ck-acts") || ev.target.closest("input, .pln-ck-more")) return;
+    swipe = { row, li, x: ev.clientX, y: ev.clientY, id: ev.pointerId, on: false, pos: 0, w: li.querySelector(".pln-ck-acts").offsetWidth || 150, open: li.hasAttribute("data-open") };
+  }
+  function swipeMove(ev) {
+    if (!swipe || ev.pointerId !== swipe.id) return;
+    const dx = ev.clientX - swipe.x, dy = ev.clientY - swipe.y;
+    if (!swipe.on) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; } // a scroll, not a swipe
+      if (Math.abs(dx) < 10) return;
+      swipe.on = true;
+      swipe.row.style.transition = "none";
+      swipe.li.setAttribute("data-swiping", "");
+    }
+    const dir = ar() ? 1 : -1; // the actions sit at the row's end: drag toward its start to show them
+    swipe.pos = Math.max(0, Math.min(swipe.w, (swipe.open ? swipe.w : 0) + dx * dir));
+    swipe.row.style.transform = `translateX(${dir * swipe.pos}px)`;
+  }
+  function swipeEnd(ev) {
+    if (!swipe || ev.pointerId !== swipe.id) return;
+    const s = swipe;
+    swipe = null;
+    if (!s.on) return;
+    P.swiped = Date.now(); // the click that ends a swipe is not a tap on the row
+    s.row.style.transition = "";
+    s.li.removeAttribute("data-swiping");
+    const open = s.pos > s.w * 0.45;
+    s.li.toggleAttribute("data-open", open);
+    s.row.style.transform = open ? `translateX(${(ar() ? 1 : -1) * s.w}px)` : "";
+    s.li.querySelectorAll(".pln-ck-act").forEach((b) => { b.tabIndex = open ? 0 : -1; });
+  }
+  function onSubmit(ev) {
+    const form = ev.target.closest?.(".pln-ck-form");
+    if (!form) return;
+    ev.preventDefault();
+    const c = ctxOf(form), value = form.querySelector(".pln-ck-input")?.value || "";
+    if (!c) return;
+    if (form.dataset.kind === "add") {
+      if (!edit(c.e.id, opFor(c.s, null, "add", value))) return form.querySelector(".pln-ck-input")?.focus();
+      P.editing = { key: "new", host: c.host }; // it stays open for the next one
+    } else {
+      const r = rowOf(c.s, form.closest("[data-key]")?.dataset.key);
+      if (r && !edit(c.e.id, opFor(c.s, r, "edit", value))) return form.querySelector(".pln-ck-input")?.focus();
+      P.editing = null;
+    }
+    P.restore = { host: c.host };
+    if (c.host === "sheet") { paintSheet(); redraw(); putFocus(); } else redraw();
+  }
+  function onKey(ev) {
+    if (ev.key === "Escape" && ev.target.closest?.(".pln-ck-form")) { // Escape cancels the rename or the new row, not the whole panel
+      ev.preventDefault(); ev.stopPropagation();
+      const host = ev.target.closest("[data-host]")?.dataset.host;
+      P.editing = null;
+      const key = ev.target.closest("[data-key]")?.dataset.key;
+      P.restore = { host, key: !key || key === "new" ? "add" : key }; // back to Add requirement, or the renamed row
+      if (host === "sheet") { paintSheet(); putFocus(); } else redraw();
+    }
+  }
+  if (!backup && typeof document !== "undefined") {
+    document.addEventListener("pointerdown", swipeStart, { passive: true });
+    document.addEventListener("pointermove", swipeMove, { passive: true });
+    document.addEventListener("pointerup", swipeEnd);
+    document.addEventListener("pointercancel", swipeEnd);
+    document.addEventListener("submit", onSubmit, true);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("input", (ev) => { // what he types survives the panel being drawn again
+      if (P.editing && ev.target.matches?.(".pln-ck-input")) { P.editing.draft = ev.target.value; P.editing.caret = ev.target.selectionStart; }
+    }, true);
+    addEventListener("pagehide", () => flush(true)); // a change made just before the page closes still reaches the PC
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flush(true); });
   }
 
   // ---------- Overview ----------
@@ -627,45 +1164,14 @@ export function createPlans(d) {
   function listOf(items, kind) {
     return `<ul class="pln-list" data-kind="${kind}">${items.map((x) => `<li>${kind === "ok" ? `<span class="pln-tick" aria-hidden="true">${CHECK}</span>` : `<span class="pln-gap" aria-hidden="true"></span>`}<span dir="auto">${esc(x)}</span></li>`).join("")}</ul>`;
   }
-  function stepsEl(part) {
-    const st = R.steps(part);
-    if (!st.total) return "";
-    const items = st.list.map((s, i) => {
-      const state = s.done ? "done" : i === st.current ? "now" : "later";
-      return `<li data-state="${state}"><span class="pln-snode">${s.done ? CHECK : `<span class="num">${i + 1}</span>`}</span><span class="pln-stext" dir="auto">${esc(s.text)}</span></li>`;
-    }).join("");
-    return `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("progress"))}</h3><span class="meta num">${esc(t("of", { a: st.done, b: st.total }))}</span></div>
-      <ol class="pln-steps${st.total > 5 ? " many" : ""}" style="--n:${st.total}" aria-label="${esc(t("stepsDoneOf", { a: st.done, b: st.total }))}">${items}</ol></section>`;
-  }
   function whoChip(who) {
     const words = W();
     return `<span class="pln-whochip" data-who="${who}">${g(who === "both" ? "users" : who === "you" ? "user" : "sparkles")}${esc(words.who[who])}</span>`;
   }
+  // A part: its requirements, notes and files (the same panel as beside the map), with Add note and Open in plan.
   function openPart(planId, partId) {
     const e = entryOf(planId);
-    const hit = e?.plan && R.findPart(e.plan, partId);
-    if (!hit) return;
-    const { part, layer } = hit;
-    const words = W(), at = layer.parts.indexOf(part) + 1;
-    const stop = part.stop != null ? e.plan.stops.find((s) => s.n === part.stop) : null;
-    const noted = R.notedIn(part.source, e.plan.sources);
-    const head = `<div class="panel-head pln-ph"><span class="pln-ph-icon">${g(layer.icon || "layers")}</span><div class="main"><h2 dir="auto">${esc(part.title)}</h2>
-      <div class="about" dir="auto">${esc(t("partOf", { layer: layer.name, at, n: layer.parts.length }))}</div></div>${closeBtn()}</div>`;
-    const body = `${part.purpose ? `<p class="pln-purpose" dir="auto">${esc(part.purpose)}</p>` : ""}
-      <div class="pln-facts"><span class="pln-badge" data-s="${part.status}">${si(part.status)}${esc(words.status[part.status])}</span>${whoChip(part.who)}
-        ${stop ? `<button type="button" class="pln-stopref" data-act="pln-stop" data-plan="${esc(e.id)}" data-n="${stop.n}"><span class="pln-stopref-n num">${stop.n}</span><span dir="auto">${esc(stop.title)}</span> · ${esc(words.stop[stop.state])}</button>` : ""}</div>
-      <p class="pln-lead" dir="auto">${esc(part.summary)}</p>
-      ${stepsEl(part)}
-      ${part.exists.length ? `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("whatsDone"))}</h3><span class="meta num">${part.exists.length}</span></div>${listOf(part.exists, "ok")}</section>` : ""}
-      ${part.missing.length ? `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("whatsMissing"))}</h3><span class="meta num">${part.missing.length}</span></div>${listOf(part.missing, "miss")}</section>` : ""}
-      ${noted.length ? `<section class="pln-psec"><div class="pln-psec-head"><h3>${esc(t("notedIn"))}</h3></div><div class="pln-noted">${noted.map((n) => n.url
-        ? `<a class="pln-noted-row" href="${esc(n.url)}" target="_blank" rel="noopener">${g("file-text")}<span dir="auto">${esc(n.text)}</span>${g("external")}</a>`
-        : n.source ? `<a class="pln-noted-row" href="${R.href(e.id, "where")}" data-act="pln-where" data-plan="${esc(e.id)}">${g("file-text")}<span dir="auto">${esc(n.text)}</span>${fwd()}</a>`
-          : `<div class="pln-noted-row">${g("file-text")}<span dir="auto">${esc(n.text)}</span></div>`).join("")}</div></section>` : ""}`;
-    const note = R.partFileUrl(e, part.id);
-    const foot = `${note ? `<a class="btn pln-addnote" href="${esc(note)}" target="_blank" rel="noopener" title="${esc(t("addNoteHint"))}">${g("pencil")}${esc(t("addNote"))}</a>` : ""}
-      <button type="button" class="btn primary" data-act="pln-inplan" data-plan="${esc(e.id)}" data-id="${esc(part.id)}">${esc(t("openInPlan"))}${g(ar() ? "chevron-left" : "arrow-right")}</button>`;
-    panel(e, head, body, foot);
+    if (e?.plan && R.findPart(e.plan, partId)) openSheet(e.id, "part", partId);
   }
   const partRows = (e, pairs) => `<div class="pln-prows">${pairs.map(({ part, layer }) => `<button type="button" class="pln-prow" data-act="pln-part" data-plan="${esc(e.id)}" data-id="${esc(part.id)}" data-s="${part.status}">
       ${si(part.status)}<span class="pln-prow-t"><b dir="auto">${esc(part.title)}</b><span dir="auto">${esc(part.purpose || part.summary)}</span></span><span class="pln-prow-s">${esc(W().status[part.status])}${layer ? `<small dir="auto">${esc(layer.name)}</small>` : ""}</span></button>`).join("")}</div>`;
@@ -684,15 +1190,10 @@ export function createPlans(d) {
   }
   function openLayer(id) {
     const e = current();
-    const layer = e?.plan?.layers.find((l) => l.id === id);
-    if (!layer) return;
-    const sum = R.layerSummary(layer, W().status_order);
-    panel(e, `<div class="panel-head pln-ph"><span class="pln-ph-icon">${g(layer.icon || "layers")}</span><div class="main"><h2 dir="auto">${esc(layer.name)}</h2>
-      <div class="about" dir="auto">${esc(layer.note || e.plan.title)} · ${esc(t("liveOf", { a: sum.live, b: sum.total }))}</div></div>${closeBtn()}</div>`,
-    layer.parts.length ? partRows(e, layer.parts.map((part) => ({ part }))) : `<p class="pln-line-empty">${esc(t("noParts"))}</p>`);
+    if (e?.plan?.layers.some((l) => l.id === id)) openSheet(e.id, "layer", id);
   }
-  function openNeeds() {
-    const e = current();
+  function openNeeds(planId) {
+    const e = planId ? entryOf(planId) : current();
     if (!e?.plan) return;
     const list = e.derived.needs_you;
     panel(e, `<div class="panel-head pln-ph"><span class="pln-ph-icon" data-s="needs-you">${si("needs-you", "lg")}</span><div class="main"><h2>${esc(t("whatNeedsYou"))}</h2>
@@ -759,12 +1260,76 @@ export function createPlans(d) {
   function go(hash) {
     if (location.hash === hash) redraw(); else location.hash = hash;
   }
+  function openRow(c, r) { // a part's row in an area's checklist opens that part, in the same place
+    P.rtab = "req"; P.editing = null;
+    if (c.host === "dock") { P.sel = r.id; P.restore = { host: "dock" }; redraw(); return; }
+    P.sheet = { plan: c.e.id, kind: "part", id: r.id, from: c.s.layer.id };
+    repaint("sheet");
+  }
   async function act(name, el) {
+    const tapped = Date.now() - P.swiped > 400; // the click that ends a swipe is not a tap
     switch (name) {
       case "pln-part": openPart(el.dataset.plan, el.dataset.id); break;
+      case "pln-block": { // a block in an area's own map: its requirements beside the map, or in the sheet on a phone
+        const e = current(), id = el.dataset.id;
+        if (!e) break;
+        if (!dockShown()) { openSheet(e.id, "part", id, el.dataset.layer); break; }
+        P.sel = id; P.rtab = "req"; P.editing = null;
+        redraw();
+        $(`.pln-block[data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+        break;
+      }
+      case "pln-sel": P.restore = { host: "dock", key: P.sel ? `p:${P.sel}` : "" }; P.sel = el.dataset.id || ""; P.rtab = "req"; P.editing = null; redraw(); break;
+      case "pln-sheet-area": {
+        P.rtab = "req"; P.editing = null;
+        if (el.closest("[data-host='sheet']")) { P.sheet = { plan: el.dataset.plan, kind: "layer", id: el.dataset.id, from: "" }; repaint("sheet"); }
+        else if (dockShown()) { P.sel = ""; redraw(); } else openSheet(el.dataset.plan, "layer", el.dataset.id);
+        break;
+      }
+      case "pln-sheet-part": openSheet(el.dataset.plan, "part", el.dataset.id); break;
+      case "pln-seemap": closePanel(); P.sheet = null; go(el.dataset.href); break;
+      case "pln-rtab": {
+        const host = el.closest("[data-host]")?.dataset.host;
+        P.rtab = el.dataset.v; P.editing = null; P.restore = { host, key: `tab:${el.dataset.v}` };
+        if (host === "sheet") { paintSheet(); putFocus(); } else redraw();
+        break;
+      }
+      case "pln-open-row": {
+        const c = ctxOf(el), r = c && rowOf(c.s, el.dataset.key);
+        if (r && tapped) openRow(c, r);
+        break;
+      }
+      case "pln-tick": {
+        const c = ctxOf(el), r = c && rowOf(c.s, el.dataset.key);
+        if (r && tapped && editable() && edit(c.e.id, opFor(c.s, r, "tick"))) refresh();
+        break;
+      }
+      case "pln-rowmenu": openMenu(el); break;
+      case "pln-m-open": case "pln-m-edit": case "pln-m-done": case "pln-m-remove": {
+        const m = P.menu;
+        closeMenu();
+        const e = m && entries().find((x) => x.id === m.plan), s = e?.plan && subjectOf(e, m.kind, m.id), r = s && rowOf(s, m.key);
+        if (!r) break;
+        const c = { e, s, host: m.host };
+        if (name === "pln-m-open") openRow(c, r);
+        else if (name === "pln-m-edit") startEdit(c, r.key);
+        else if (name === "pln-m-remove") removeRow(c, r);
+        else if (edit(e.id, opFor(s, r, "tick"))) { P.editing = null; refresh({ host: m.host, key: r.key }); }
+        break;
+      }
+      case "pln-redit": { const c = ctxOf(el); if (c) { closeSwipes(); startEdit(c, el.dataset.key); } break; }
+      case "pln-rdel": { const c = ctxOf(el), r = c && rowOf(c.s, el.dataset.key); if (r) { closeSwipes(); removeRow(c, r); } break; }
+      case "pln-addreq": { const c = ctxOf(el); if (c && editable()) startEdit(c, "new"); break; }
+      case "pln-ck-cancel": {
+        const host = el.closest("[data-host]")?.dataset.host;
+        P.editing = null; P.restore = { host, key: el.closest("[data-key]")?.dataset.key === "new" ? "add" : el.closest("[data-key]")?.dataset.key };
+        if (host === "sheet") { paintSheet(); putFocus(); } else redraw();
+        break;
+      }
       case "pln-stop": openStop(el.dataset.plan, el.dataset.n); break;
       case "pln-layer": openLayer(el.dataset.id); break;
-      case "pln-needs": openNeeds(); break;
+      case "pln-needs": openNeeds(el.dataset.plan); break;
+      case "pln-focus": tick(el); break;
       case "pln-dec": openDecision(el.dataset.plan, el.dataset.id); break;
       case "pln-cost": openCost(el.dataset.plan, el.dataset.i); break;
       case "pln-new": openNewPlan(); break;
@@ -785,6 +1350,7 @@ export function createPlans(d) {
         break;
       case "pln-inplan": { // close the part and show it among the others, in the system map
         P.focus = el.dataset.id;
+        P.sheet = null;
         closePanel();
         go(R.href(el.dataset.plan, "map"));
         break;
@@ -827,6 +1393,8 @@ export function createPlans(d) {
   // ---------- lifecycle ----------
   function mount() {
     if (!P.timer && !backup) P.timer = setInterval(() => { if (document.visibilityState === "visible") load(); }, 60000);
+    keepMenu();
+    if (P.restore && P.restore.host !== "sheet") putFocus();
     P.ro?.disconnect(); P.ro = null;
     if ($(".pln-flow")) {
       drawLinks(); applyZoom();
@@ -849,17 +1417,21 @@ export function createPlans(d) {
     clearInterval(P.timer); P.timer = null;
     document.documentElement.classList.remove("pln-maproom");
     P.ro?.disconnect(); P.ro = null;
+    closeMenu();
+    flush(); // leaving Plans saves what is waiting now
     leave();
   }
   const setId = (id, tab, node) => {
     const next = id || null;
     if (P.shown && P.shown.id !== (R.pick(entries(), next)?.id ?? next)) leave();
     if (tab === R.VIEW || R.TABS.includes(tab)) { P.view = tab === R.VIEW ? "map" : "details"; localSet("plansView", P.view); } // his last choice opens next time
+    const was = `${P.id}|${P.tab}|${P.node}`;
     P.id = next; P.tab = R.tabOf(tab, P.view === "map" ? R.VIEW : "overview"); P.node = P.tab === R.VIEW ? node || "" : "";
     if (P.tab !== R.VIEW) P.depth = 0;
+    if (was !== `${P.id}|${P.tab}|${P.node}`) { P.sel = ""; P.rtab = "req"; P.editing = null; closeMenu(); } // a new level starts with the area itself
   };
   const search = (q) => R.searchParts(entries(), q);
   const isLoaded = () => P.loaded;
   const statusWord = (k) => R.words(P.data).status[k] || k;
-  return { render, mount, unmount, act, load, search, openPart, setId, isLoaded, si, statusWord, homeRail };
+  return { render, mount, unmount, act, load, search, openPart, setId, isLoaded, si, statusWord, homeRail, homeFocus, activityPlans };
 }

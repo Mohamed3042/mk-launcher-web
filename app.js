@@ -8,6 +8,7 @@ import { createPlans } from "./plans.js";
 import * as source from "./source.js";
 import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
+import * as HM from "./home-rules.js";
 
 const BACKUP = source.BACKUP; // the GitHub Pages copy: reads the PC's last snapshot, greys out what needs the PC
 
@@ -36,7 +37,7 @@ const S = {
   route: "home", q: "", sel: 0,
   appsGroup: "all", appsView: localGet("appsView", "grid"), ghFilter: "public", ghSort: "recent",
   changesView: "timeline", changesFilter: "all", files: null, editPins: false, statsRepo: null,
-  after: [],
+  after: [], changes: [], checkedAt: 0,
 };
 
 // ---------- utilities ----------
@@ -194,38 +195,26 @@ const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, g
   redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
 const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup: BACKUP,
   liveOrigin: () => S.liveOrigin, redraw: () => { if (["plans", "home"].includes(S.route) && !S.q) render(); } });
+const HOME_LIGHT = "#c98a3c"; // the header photo's golden hour
 const MORE = [["#/plans", "Plans", "map"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
 const views = {
+  // Home (the owner's Milk concept, 28 Oct 2026): a golden-hour photo header, his main app on glass over it, pinned
+  // apps, the plans, Today's focus and Recent activity; What changed beside them on a wide screen.
   home() {
     const pins = S.pins.map((id) => S.byId[id]).filter(Boolean);
-    const recentApps = S.recents.map((r) => S.byId[r.id]).filter(Boolean);
-    const cont = recentApps[0] || pins[0];
+    const main = pins[0] || S.recents.map((r) => S.byId[r.id]).find(Boolean); // his main app: the first pin, else the last one opened
     const down = S.apps.filter((a) => a.type === "app" && ["down", "starting"].includes(stateOf(a)));
-    if (cont?.color) document.documentElement.style.setProperty("--glow", cont.color);
-    let left = `<h1 class="page-title">Home</h1>`, right = "";
-    if (cont) {
-      left += `<section class="section"><div class="continue" style="--c:${esc(cont.color)}">
-        ${appIcon(cont, "lg")}
-        <div class="what"><div class="name" dir="auto">${esc(cont.name)}</div>
-        <div class="state">${statusEl(cont, true)}${recentApps[0] ? `<span class="opened">opened ${esc(ago(S.recents[0].at))}</span>` : ""}</div></div>
-        ${openLink(cont, "btn primary", "Open")}</div></section>`;
-    }
-    const pinTiles = pins.map((a) => S.editPins
-      ? `<div class="tile" data-act="unpin" data-id="${esc(a.id)}" role="button" tabindex="0">${appIcon(a)}<span class="name">${esc(a.name)}</span><span class="st down"><i></i>Remove</span></div>`
-      : tile(a)).join("");
-    left += section("Pinned", "", `<div class="tiles" data-grid="pins">${pinTiles || `<p class="sub">Nothing pinned. Open an app's details and tap Pin.</p>`}${S.editPins ? `<div class="tile" data-act="add-pin" role="button" tabindex="0"><span class="aicon" style="--c:var(--raised);color:var(--ink-2)">${g("plus")}</span><span class="name">Add</span></div>` : ""}</div>`,
-      BACKUP ? greyBtn("pins", "Edit", "link-btn") : `<button class="link-btn" data-act="edit-pins">${S.editPins ? "Done" : "Edit"}</button>`);
-    left += plans.homeRail(); // each plan's progress and next action; never in the backup
+    document.documentElement.style.setProperty("--glow", HOME_LIGHT); // on Home the photo lights the room; the main card keeps its app's light
+    let left = pinsSection(pins) + plans.homeRail(); // the plans never show in the backup
+    const pair = plans.homeFocus() + homeActivity();
+    if (pair) left += `<div class="home-pair">${pair}</div>`;
     if (down.length) {
       left += section(BACKUP ? "Stopped when last seen" : "Not running", `${down.length}`, `<div class="rows">${down.map((a) => appRow(a)).join("")}</div>`);
     }
     left += `<section class="section phone-only more-places"><div class="section-head"><h2>More places</h2></div>
       <nav class="places" aria-label="More places">${MORE.map(([href, label, icon]) => `<a class="place" href="${href}">${g(icon)}<span>${label}</span></a>`).join("")}</nav></section>`;
-    if (recentApps.length > 1) {
-      right += section("Recent", "", `<div class="rows">${recentApps.slice(1, 6).map((a) => appRow(a)).join("")}</div>`);
-    }
-    right += `<div class="changes-panel">${homeChanges()}</div>`;
-    return `${offlineBar()}<div class="home-cols"><div>${left}</div><div>${right}</div></div>`;
+    const right = `<div class="changes-panel">${homeChanges()}</div>`;
+    return `<div class="home">${offlineBar()}${homeHero(main)}<div class="home-cols"><div>${left}</div><div>${right}</div></div></div>`;
   },
 
   apps() {
@@ -325,6 +314,92 @@ const views = {
   },
 };
 
+// The header: the photo (art/), the wordmark and the status line (on a phone the sticky top bar carries them), and
+// his main app on milky glass over the photo.
+function homeHero(main) {
+  return `<section class="home-hero"><div class="home-photo" aria-hidden="true"></div>
+    <div class="home-head desk-only"><h1 class="home-title">MK Launcher</h1><div class="summary home-status">${summaryHtml()}</div></div>
+    ${main ? mainCard(main) : ""}</section>`;
+}
+function mainCard(app) {
+  const opened = S.recents.find((r) => r.id === app.id);
+  const color = esc(app.color || "#8a5a2b");
+  const st = stateOf(app);
+  const badge = st === "none" || st === "unknown" ? "" : `<span class="badge ${st}"></span>`;
+  return `<div class="main-app" style="--c:${color}">
+    <span class="aicon lg" style="--c:${color};--app:${color}">${g(app.icon || "grid")}${badge}</span>
+    <div class="what"><span class="eyebrow">My main app</span>
+      <button type="button" class="name" data-act="app-detail" data-id="${esc(app.id)}" aria-label="${esc(app.name)}, details"><span dir="auto">${esc(app.name)}</span>${g("chevron-right")}</button>
+      <div class="state">${statusEl(app, true)}${opened ? `<span class="opened">opened ${esc(ago(opened.at))}</span>` : ""}</div></div>
+    ${startButton(app, false) || openLink(app, "btn primary", `Open${g("arrow-right")}`)}</div>`;
+}
+function pinsSection(pins) {
+  const tiles = pins.map((a) => S.editPins
+    ? `<div class="tile" data-act="unpin" data-id="${esc(a.id)}" role="button" tabindex="0">${appIcon(a)}<span class="name">${esc(a.name)}</span><span class="st down"><i></i>Remove</span></div>`
+    : tile(a)).join("");
+  const add = S.editPins ? `<div class="tile" data-act="add-pin" role="button" tabindex="0"><span class="aicon" style="--c:var(--raised);color:var(--ink-2)">${g("plus")}</span><span class="name">Add</span></div>` : "";
+  const edit = BACKUP ? greyBtn("pins", "Edit", "btn sm") : `<button type="button" class="btn sm" data-act="edit-pins" aria-pressed="${S.editPins}">${S.editPins ? "Done" : "Edit"}</button>`;
+  const menu = BACKUP ? "" : `<div class="menu-wrap"><button type="button" class="icon-btn round" data-act="pins-menu" aria-haspopup="menu" aria-expanded="false" aria-label="More for pinned apps">${g("more")}</button>
+    <div class="menu" role="menu" aria-label="Pinned apps" hidden>
+      <button type="button" role="menuitem" data-act="add-pin">${g("plus")}Add an app</button>
+      <button type="button" role="menuitem" data-act="main-pick">${g("star")}Choose my main app</button>
+      <a role="menuitem" href="#/apps">${g("apps")}All apps</a></div></div>`;
+  return section("Pinned apps", "", `<div class="tiles" data-grid="pins">${tiles || `<p class="sub">Nothing pinned. Open an app's details and tap Pin.</p>`}${add}</div>`, edit + menu);
+}
+function mainPickPanel() {
+  const pins = S.pins.map((id) => S.byId[id]).filter(Boolean);
+  openPanel(`<div class="panel-head"><div class="main"><h2>Choose your main app</h2><div class="about">It leads Home with its own Open button</div></div>${closeBtn()}</div>
+    <div class="panel-body">${pins.length ? `<div class="tiles">${pins.map((a, i) => `<div class="tile${i ? "" : " selected"}" data-act="make-main" data-id="${esc(a.id)}" role="button" tabindex="0" aria-pressed="${!i}">${appIcon(a)}<span class="name">${esc(a.name)}</span></div>`).join("")}</div>
+      <p class="sub">Only pinned apps can lead. Pin another one from its details first.</p>` : `<div class="note">${g("pin")}<div>Pin an app first: open its details and tap <b>Pin</b>.</div></div>`}</div>`);
+}
+// Recent activity: the PC's last check, apps that went down or came back, the apps he opened and the plans that changed.
+function checkCounts() {
+  const c = counts();
+  return { ...c, total: c.up + c.down + c.starting };
+}
+function activityRows(max) {
+  return HM.activity({ byId: S.byId, checked: BACKUP ? S.snapAt : S.checkedAt, counts: checkCounts(), changes: S.changes,
+    recents: S.recents, plans: plans.activityPlans(), backup: BACKUP }, Date.now(), max);
+}
+function activityRow(r) {
+  const mark = r.shape === "plan" ? `<span class="act-mark plan" style="--c:${esc(r.color || "var(--accent)")}"><i></i></span>`
+    : `<span class="act-mark st ${r.shape === "neutral" ? "" : r.shape}"><i></i></span>`;
+  const text = r.kind === "opened" ? `Opened <b dir="auto">${esc(r.name)}</b>` : `<b dir="auto">${esc(r.name)}</b> ${esc(r.word)}`;
+  const inner = `${mark}<span class="act-text">${text}</span><time class="num" datetime="${new Date(r.t).toISOString()}">${esc(ago(r.t))}</time>`;
+  return `<li>${r.href ? `<a class="act-row" href="${esc(r.href)}">${inner}</a>` : `<button type="button" class="act-row" data-act="app-detail" data-id="${esc(r.app)}">${inner}</button>`}</li>`;
+}
+function homeActivity() {
+  const rows = activityRows(3);
+  if (!rows.length) return (S.actHtml = "");
+  return (S.actHtml = `<section class="home-card activity" aria-labelledby="act-h"><div class="home-card-head"><h2 id="act-h">Recent activity</h2>
+    <button type="button" class="icon-btn round sm" data-act="activity-all" aria-label="All recent activity">${g("chevron-right")}</button></div>
+    <ol class="act-list">${rows.map(activityRow).join("")}</ol></section>`);
+}
+// The times and the last check move on without redrawing Home under his thumb: only a real change repaints the card,
+// never while a panel is open (it may have come from a row), and focus stays on the same control.
+function paintActivity() {
+  const card = $(".home-card.activity");
+  if (!card || S.route !== "home" || S.q || $("#panel").classList.contains("on")) return;
+  const before = S.actHtml, html = homeActivity();
+  if (html === before) return;
+  const controls = () => $$("button, a", $(".home-card.activity") || document.createElement("i"));
+  const at = controls().indexOf(document.activeElement);
+  card.outerHTML = html;
+  if (at >= 0) controls()[at]?.focus({ preventScroll: true });
+}
+function activityPanel() {
+  const rows = activityRows(20);
+  openPanel(`<div class="panel-head"><div class="main"><h2>Recent activity</h2><div class="about">${BACKUP ? "As last seen" : "Checks, apps going down or coming back, what you opened, plan changes"}</div></div>${closeBtn()}</div>
+    <div class="panel-body">${rows.length ? `<ol class="act-list all">${rows.map(activityRow).join("")}</ol>` : `<div class="note">${g("activity")}<div>Nothing yet.</div></div>`}</div>`);
+}
+function closeMenus(except) {
+  $$(".menu-wrap .menu:not([hidden])").forEach((m) => {
+    if (m.parentElement === except) return;
+    m.hidden = true;
+    m.parentElement.querySelector("[aria-expanded]")?.setAttribute("aria-expanded", "false");
+  });
+}
+
 function onPc(app) {
   try { return source.needsPc(app) && (!S.publicOrigin || app.type === "app" || new URL(app.url).hostname === new URL(S.publicOrigin).hostname); }
   catch { return false; }
@@ -398,7 +473,7 @@ function homeChanges() {
   if (!body) body = `<div class="note">${g("history")}<div>Changes show up here once GitHub and the first screenshots load.</div></div>`;
   const projects = new Set(lines.map((c) => c.repo)).size;
   const meta = lines.length ? `${lines.length} update${lines.length > 1 ? "s" : ""} in ${projects} project${projects > 1 ? "s" : ""}` : "";
-  return section(title, meta, `<div class="plain-feed">${body}</div>`, `<a class="link-btn" href="#/changes">See all</a>`);
+  return section(title, meta, `<div class="plain-feed">${body}</div>`, `<a class="btn sm see-all" href="#/changes">See all${g("arrow-right")}</a>`);
 }
 
 // Why a picture changed: the newest visible update to that app between the two pictures.
@@ -648,6 +723,7 @@ function appPanel(id) {
     ${(app.alt || []).map((l) => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}
     ${app.repo ? `<a class="btn ghost" href="${esc(app.repo)}" target="_blank" rel="noopener">${g("github")}Code</a>` : ""}
     ${BACKUP ? greyBtn("pins", `${g(pinned ? "pin-off" : "pin")}${pinned ? "Unpin" : "Pin"}`, "btn ghost") : `<button class="btn ghost" data-act="${pinned ? "unpin" : "pin"}" data-id="${esc(id)}">${g(pinned ? "pin-off" : "pin")}${pinned ? "Unpin" : "Pin"}</button>`}
+    ${!BACKUP && pinned && S.pins[0] !== id ? `<button class="btn ghost" data-act="make-main" data-id="${esc(id)}">${g("star")}Make it my main app</button>` : ""}
     <button class="icon-btn" data-act="copy" data-text="${esc(app.url)}" aria-label="Copy link">${g("copy")}</button></div>`;
   if (pcOnly(app)) {
     body += `<div class="note" style="margin-top:14px">${g("monitor")}<div><b>Runs on your PC.</b> It opens again when your PC is back.${app.alt?.length ? " The other links work now." : ""}</div></div>`;
@@ -910,7 +986,27 @@ async function act(name, el) {
       break;
     }
     case "edit-pins": S.editPins = !S.editPins; render(); break;
-    case "add-pin": addPinPanel(); break;
+    case "add-pin": closeMenus(); addPinPanel(); break;
+    case "pins-menu": {
+      const wrap = el.closest(".menu-wrap"), menu = wrap?.querySelector(".menu");
+      if (!menu) break;
+      closeMenus(wrap);
+      menu.hidden = !menu.hidden;
+      el.setAttribute("aria-expanded", String(!menu.hidden));
+      if (!menu.hidden) menu.querySelector("[role=menuitem]")?.focus();
+      break;
+    }
+    case "main-pick": closeMenus(); mainPickPanel(); break;
+    case "make-main": {
+      const app = S.byId[id];
+      try { S.pins = (await post("/api/pins", { pins: [id, ...S.pins.filter((p) => p !== id)] })).pins; toast(`${app?.name || "It"} is your main app`); }
+      catch (e) { toast(e.message); }
+      closePanel();
+      render();
+      break;
+    }
+    case "app-detail": appPanel(id); break;
+    case "activity-all": activityPanel(); break;
     case "copy": copy(el.dataset.text, "Link copied"); break;
     case "close": closePanel(); break;
     case "apps-group": S.appsGroup = el.dataset.v; render(); break;
@@ -998,16 +1094,20 @@ function applyTheme() {
 }
 
 // ---------- shell render ----------
-function renderShell() {
+function summaryHtml() {
   const c = counts();
-  const summary = BACKUP ? `<span class="st backup-st"><i></i>Backup${S.snapAt ? ` · ${esc(source.clock(S.snapAt * 1000))}` : ""}</span>`
+  return BACKUP ? `<span class="st backup-st"><i></i>Backup${S.snapAt ? ` · ${esc(source.clock(S.snapAt * 1000))}` : ""}</span>`
     : S.loaded ? (S.online ? `<span class="st up"><i></i><b>${c.up}</b>&nbsp;running</span>${c.down ? `<span class="st down"><i></i><b>${c.down}</b>&nbsp;stopped</span>` : ""}${c.starting ? `<span class="st starting"><i></i>${c.starting} starting</span>` : ""}` : `<span class="st down"><i></i>PC offline</span>`) : `<span class="st"><i></i>Checking…</span>`;
+}
+function renderShell() {
+  const summary = summaryHtml();
   $("#summary").innerHTML = summary;
   $("#rail-summary").innerHTML = summary;
   const title = S.route === "home" ? "MK Launcher" : TITLES[S.route];
   const name = BACKUP ? "MK Launcher Backup" : "MK Launcher";
   $("#title").textContent = S.q ? "Search" : title;
   $("#title").classList.toggle("wordmark", !S.q && S.route === "home");
+  document.documentElement.classList.toggle("route-home", !S.q && S.route === "home"); // the top bar floats over the photo
   document.title = S.route === "home" ? name : `${title} · ${name}`;
   $$("[data-route]").forEach((a) => a.setAttribute("aria-current", a.dataset.route === S.route && !S.q ? "page" : "false"));
   const showDock = ["home", "apps"].includes(S.route) || S.q;
@@ -1044,7 +1144,7 @@ async function loadApps() {
 async function loadStatus(fresh = false) {
   try {
     const d = await api(`/api/status${fresh ? "?fresh=1" : ""}`);
-    S.status = d.apps; S.online = !BACKUP; S.loaded = true;
+    S.status = d.apps; S.online = !BACKUP; S.loaded = true; S.checkedAt = d.checked || 0;
     if (!BACKUP) { localSet("status", d.apps); localSet("savedAt", Date.now()); }
   } catch {
     S.online = false; S.loaded = true;
@@ -1063,6 +1163,10 @@ async function loadShots() {
 }
 async function loadPc() { if (BACKUP) return; try { S.pc = await api("/api/pc"); if (S.route === "pc" && !S.files) render(); } catch { /* optional */ } }
 async function loadOverview() { try { S.overview = await api("/api/history/overview"); if (S.route === "pc") render(); } catch { /* optional */ } }
+async function loadChanges() { // apps that went down or came back (the PC's history; the backup has none)
+  if (BACKUP) return;
+  try { S.changes = (await api("/api/history/changes")).changes || []; paintActivity(); } catch { /* optional */ }
+}
 
 let pollTimer;
 function schedulePoll(ms) {
@@ -1073,6 +1177,7 @@ function schedulePoll(ms) {
       const before = JSON.stringify(Object.fromEntries(Object.entries(S.status).map(([k, v]) => [k, v.state])));
       await loadStatus();
       const after = JSON.stringify(Object.fromEntries(Object.entries(S.status).map(([k, v]) => [k, v.state])));
+      if (before === after) paintActivity();
       if (before !== after) {
         renderShell();
         // Reels and Settings show no app status: never redraw them under his thumb
@@ -1113,6 +1218,7 @@ function route() {
 // ---------- events ----------
 function bind() {
   document.addEventListener("click", (e) => {
+    if (!e.target.closest(".menu-wrap")) closeMenus();
     const openLink = e.target.closest("a[data-open]");
     if (openLink && !e.defaultPrevented) {
       if (S.longPressed) { e.preventDefault(); S.longPressed = false; return; }
@@ -1131,6 +1237,14 @@ function bind() {
     if (host.isOpen()) { if (host.keydown(e)) e.preventDefault(); return; } // the app layer owns the keys
     if (S.route === "reels" && !S.q && reels.keydown(e)) { e.preventDefault(); return; }
     const typing = e.target.matches("input, textarea, select");
+    const menu = $(".menu-wrap .menu:not([hidden])");
+    if (menu && menu.parentElement.contains(document.activeElement) && ["Escape", "ArrowDown", "ArrowUp"].includes(e.key)) { // the "…" menu on Home
+      e.preventDefault();
+      if (e.key === "Escape") { closeMenus(); menu.parentElement.querySelector("[aria-haspopup]")?.focus(); return; }
+      const items = $$("[role=menuitem]", menu), at = items.indexOf(document.activeElement);
+      items[e.key === "ArrowDown" ? (at + 1) % items.length : at <= 0 ? items.length - 1 : at - 1]?.focus();
+      return;
+    }
     if (e.key === "Escape") {
       if ($("#panel").classList.contains("on")) { closePanel(); return; }
       if (S.q) { setQuery(""); e.target.blur?.(); return; }
@@ -1184,9 +1298,18 @@ function bind() {
       loadLines(S.statsRepo);
     }
   });
+  document.addEventListener("focusout", (e) => { // Tab out of the "…" menu closes it (a click is handled above)
+    const wrap = e.target.closest?.(".menu-wrap");
+    if (wrap && e.relatedTarget && !wrap.contains(e.relatedTarget)) closeMenus();
+  });
   window.addEventListener("hashchange", route);
   window.addEventListener("scroll", () => $(".topbar").classList.toggle("scrolled", window.scrollY > 4), { passive: true });
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { if (BACKUP) refreshBackup(); else loadStatus().then(() => { renderShell(); }); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (BACKUP) { refreshBackup(); return; }
+    loadStatus().then(() => { renderShell(); });
+    if (S.route === "home") { plans.load(); loadChanges(); } // ticks made on his other device, apps that went down meanwhile
+  });
   document.addEventListener("submit", (e) => {
     if (e.target.id !== "connect-form") return;
     e.preventDefault();
@@ -1241,13 +1364,18 @@ async function boot() {
     S.github = localGet("github", null);
   }
   route();
+  if (S.route !== "plans") plans.load(); // for search and Home, before the slow first check of every app; the Plans page loads its own
+  loadChanges();
   try { await loadApps(); } catch { S.online = false; S.loaded = true; }
   await loadStatus(true);
   render();
   schedulePoll(10000);
   loadGithub(); loadShots(); loadPc(); loadOverview();
-  if (S.route !== "plans") plans.load(); // for search; the Plans page loads its own
-  setInterval(() => { if (document.visibilityState === "visible") { loadOverview(); loadShots(); } }, 120000);
+  setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    loadOverview(); loadShots(); loadChanges();
+    if (S.route === "home") plans.load(); // the Plans page keeps its own timer
+  }, 120000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
