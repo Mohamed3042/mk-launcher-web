@@ -192,8 +192,8 @@ const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () =>
 const host = createHost({ esc, g, toast });
 const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP, owner: source.OWNER,
   redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
-const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, offlineBar, localGet, localSet, backup: BACKUP,
-  liveOrigin: () => S.liveOrigin, redraw: () => { if (S.route === "plans" && !S.q) render(); } });
+const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup: BACKUP,
+  liveOrigin: () => S.liveOrigin, redraw: () => { if (["plans", "home"].includes(S.route) && !S.q) render(); } });
 const MORE = [["#/plans", "Plans", "map"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
 const views = {
   home() {
@@ -215,6 +215,7 @@ const views = {
       : tile(a)).join("");
     left += section("Pinned", "", `<div class="tiles" data-grid="pins">${pinTiles || `<p class="sub">Nothing pinned. Open an app's details and tap Pin.</p>`}${S.editPins ? `<div class="tile" data-act="add-pin" role="button" tabindex="0"><span class="aicon" style="--c:var(--raised);color:var(--ink-2)">${g("plus")}</span><span class="name">Add</span></div>` : ""}</div>`,
       BACKUP ? greyBtn("pins", "Edit", "link-btn") : `<button class="link-btn" data-act="edit-pins">${S.editPins ? "Done" : "Edit"}</button>`);
+    left += plans.homeRail(); // each plan's progress and next action; never in the backup
     if (down.length) {
       left += section(BACKUP ? "Stopped when last seen" : "Not running", `${down.length}`, `<div class="rows">${down.map((a) => appRow(a)).join("")}</div>`);
     }
@@ -1091,11 +1092,11 @@ function refreshPanelStatus() {
 }
 
 function route() {
-  const [h, sub] = location.hash.replace(/^#\/?/, "").split("?")[0].split("/");
+  const [h, sub, tab, node] = location.hash.replace(/^#\/?/, "").split("?")[0].split("/");
   S.route = ROUTES.includes(h) ? h : "home";
   let planId = sub || "";
   try { planId = decodeURIComponent(planId); } catch { /* a stray % in the address: use it as it is */ }
-  plans.setId(S.route === "plans" ? planId : "");
+  plans.setId(S.route === "plans" ? planId : "", tab, node);
   if (S.route === "connect" && !BACKUP) S.route = "home";
   if (BACKUP && S.route !== "connect" && !source.token()) S.route = "connect";
   if (S.route !== "pc") S.files = null;
