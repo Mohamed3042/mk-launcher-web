@@ -21,6 +21,7 @@ export const REASON = {
   news: "Checking for new stories needs your PC.",
   invite: "Inviting needs your PC.",
   cinema: "Changing the portfolio needs your PC, and it's offline.",
+  plans: "Plans stay private: they open in the live launcher and on GitHub, never in the backup.",
   default: "This needs your PC, and it's offline.",
 };
 
@@ -190,6 +191,7 @@ export function backupRead(snap, path, local = {}) {
     case "/api/cinema/job": return { kind: null, running: false, done: true };
     case "/api/cinema/film": case "/api/cinema/thumb": case "/api/cinema/poster": case "/api/cinema/video": throw new NeedsPc("cinema");
     case "/api/pc": case "/api/files": case "/api/files/raw": throw new NeedsPc("pc");
+    case "/api/plans": throw new NeedsPc("plans");
     case "/api/history": throw new NeedsPc("health");
     case "/api/github/stats": throw new NeedsPc("stats");
     default: throw new NeedsPc();
@@ -200,7 +202,7 @@ export function backupRead(snap, path, local = {}) {
 const WRITE_REASON = { "/api/start": "start", "/api/pins": "pins", "/api/pc/open": "pc", "/api/files/open": "pc",
   "/api/github/refresh": "refresh", "/api/shots/snap": "snap", "/api/news/save": "save", "/api/news/unsave": "save",
   "/api/news/refresh": "news", "/api/settings": "settings", "/api/news/invites": "invite", "/api/news/invites/remove": "invite",
-  "/api/cinema/rank": "cinema", "/api/cinema/publish": "cinema" };
+  "/api/cinema/rank": "cinema", "/api/cinema/publish": "cinema", "/api/plans/sync": "plans" };
 export function backupWrite(path, body, local) {
   const { route } = query(path);
   if (route === "/api/reels/seen") {

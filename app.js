@@ -4,6 +4,7 @@ import * as C from "./charts.js";
 import { createReels } from "./reels.js";
 import { createSettings } from "./settings.js";
 import { createCinema } from "./cinema.js";
+import { createPlans } from "./plans.js";
 import * as source from "./source.js";
 import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
@@ -17,11 +18,11 @@ const g = (name, cls = "") => `<svg class="g ${cls}" viewBox="0 0 24 24" aria-hi
 const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s7)", "var(--s8)", "var(--s6)"];
 // iPhone home-screen app: app.css keeps the page 1 px taller than the window so iOS gives it the whole screen.
 if ("standalone" in navigator && navigator.standalone === true) document.documentElement.classList.add("ios-app");
-const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "cinema", "settings", "connect"];
-const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", cinema: "Cinema", settings: "Settings", connect: "Connect" };
+const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "cinema", "plans", "settings", "connect"];
+const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", cinema: "Cinema", plans: "Plans", settings: "Settings", connect: "Connect" };
 const NAV = [ // desktop sidebar
   ["home", "Home", "home"], ["apps", "Apps", "apps"], ["reels", "Reels", "reels"], ["changes", "Changes", "changes"],
-  ["github", "GitHub", "github"], ["pc", "PC", "pc"], ["cinema", "Cinema", "film"], ["settings", "Settings", "settings"],
+  ["github", "GitHub", "github"], ["pc", "PC", "pc"], ["cinema", "Cinema", "film"], ["plans", "Plans", "map"], ["settings", "Settings", "settings"],
 ];
 const TABS = [ // phone tab bar: five at most; GitHub and PC sit in "More places" on Home
   ["home", "Home", "home"], ["reels", "Reels", "reels"], ["apps", "Apps", "apps"], ["changes", "Changes", "changes"],
@@ -191,7 +192,9 @@ const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () =>
 const host = createHost({ esc, g, toast });
 const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP, owner: source.OWNER,
   redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
-const MORE = [["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
+const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, offlineBar, localGet, localSet, backup: BACKUP,
+  liveOrigin: () => S.liveOrigin, redraw: () => { if (S.route === "plans" && !S.q) render(); } });
+const MORE = [["#/plans", "Plans", "map"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
 const views = {
   home() {
     const pins = S.pins.map((id) => S.byId[id]).filter(Boolean);
@@ -283,6 +286,11 @@ const views = {
   cinema() {
     S.after.push(() => cinema.mount());
     return cinema.render();
+  },
+
+  plans() {
+    S.after.push(() => plans.mount());
+    return plans.render();
   },
 
   pc() {
@@ -836,6 +844,7 @@ function searchItems() {
     const s = Math.max(score(r.name) * 1.5, score(r.description) * 0.5);
     if (s) out.push({ kind: "repo", s, repo: r });
   }
+  out.push(...plans.search(S.q)); // the parts of every plan: "domain", "payout", "pilot"
   return out.sort((a, b) => b.s - a.s).slice(0, 30);
 }
 function searchView() {
@@ -846,6 +855,7 @@ function searchView() {
   const rows = items.map((it, i) => {
     const sel = i === S.sel ? " selected" : "";
     if (it.kind === "app") return appRow(it.app).replace('class="row"', `class="row${sel}" data-index="${i}"`);
+    if (it.kind === "part") return `<div class="row${sel}" data-index="${i}" data-act="pln-part" data-plan="${esc(it.plan)}" data-id="${esc(it.part.id)}" role="button" tabindex="0"><span class="ficon">${plans.si(it.part.status)}</span><div class="main"><div class="name" dir="auto">${esc(it.part.title)}</div><div class="sub" dir="auto">${esc(plans.statusWord(it.part.status))} · ${esc(it.layer)} · ${esc(it.planTitle)}</div></div>${g("map")}</div>`;
     if (it.kind === "pc") return `<div class="row${sel}" data-index="${i}" data-act="pc-open" data-id="${esc(it.item.id)}" role="button" tabindex="0">${letterIcon(it.item.name, "sm")}<div class="main"><div class="name">${esc(it.item.name)}</div><div class="sub">On your PC · ${esc(it.item.where)}</div></div>${g("monitor")}</div>`;
     return repoRow(it.repo).replace('class="row"', `class="row${sel}" data-index="${i}"`);
   }).join("");
@@ -857,7 +867,8 @@ function openResult(i, detail = false) {
   if (it.kind === "app") {
     if (detail) return appPanel(it.app.id);
     openApp(it.app);
-  } else if (it.kind === "pc") pcOpen(it.item.id);
+  } else if (it.kind === "part") plans.openPart(it.plan, it.part.id);
+  else if (it.kind === "pc") pcOpen(it.item.id);
   else if (detail) repoPanel(it.repo.name);
   else window.open(it.repo.pages || it.repo.url, "_blank", "noopener");
 }
@@ -963,6 +974,7 @@ async function act(name, el) {
       if (name.startsWith("reel-")) reels.act(name, el);
       else if (name.startsWith("set-")) settings.act(name, el);
       else if (name.startsWith("cin-")) cinema.act(name, el);
+      else if (name.startsWith("pln-")) plans.act(name, el);
       break;
   }
 }
@@ -1006,9 +1018,10 @@ function render() {
   const view = $("#view");
   S.after = [];
   document.documentElement.classList.toggle("route-connect", S.route === "connect");
-  const head = S.q || S.route === "home" || S.route === "reels" || S.route === "connect" ? "" : `<h1 class="page-title">${esc(TITLES[S.route])}</h1>`;
+  const head = S.q || ["home", "reels", "connect", "plans"].includes(S.route) ? "" : `<h1 class="page-title">${esc(TITLES[S.route])}</h1>`;
   if (S.q || S.route !== "reels") reels.unmount();
   if (S.q || S.route !== "cinema") cinema.unmount();
+  if (S.q || S.route !== "plans") plans.unmount();
   C.hideTip(); // the charts it pointed at are about to be replaced
   view.innerHTML = S.q ? searchView() : head + views[S.route]();
   runAfter();
@@ -1062,7 +1075,7 @@ function schedulePoll(ms) {
       if (before !== after) {
         renderShell();
         // Reels and Settings show no app status: never redraw them under his thumb
-        if (!S.q && !["reels", "settings", "cinema"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
+        if (!S.q && !["reels", "settings", "cinema", "plans"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
         if (S.panelApp) refreshPanelStatus();
       }
     }
@@ -1078,8 +1091,11 @@ function refreshPanelStatus() {
 }
 
 function route() {
-  const h = location.hash.replace(/^#\/?/, "").split("?")[0];
+  const [h, sub] = location.hash.replace(/^#\/?/, "").split("?")[0].split("/");
   S.route = ROUTES.includes(h) ? h : "home";
+  let planId = sub || "";
+  try { planId = decodeURIComponent(planId); } catch { /* a stray % in the address: use it as it is */ }
+  plans.setId(S.route === "plans" ? planId : "");
   if (S.route === "connect" && !BACKUP) S.route = "home";
   if (BACKUP && S.route !== "connect" && !source.token()) S.route = "connect";
   if (S.route !== "pc") S.files = null;
@@ -1090,6 +1106,7 @@ function route() {
   if (S.route === "pc") { loadPc(); loadOverview(); }
   if (S.route === "github" || S.route === "changes") loadGithub();
   if (S.route === "changes") loadShots();
+  if (S.route === "plans") plans.load();
 }
 
 // ---------- events ----------
@@ -1228,6 +1245,7 @@ async function boot() {
   render();
   schedulePoll(10000);
   loadGithub(); loadShots(); loadPc(); loadOverview();
+  if (S.route !== "plans") plans.load(); // for search; the Plans page loads its own
   setInterval(() => { if (document.visibilityState === "visible") { loadOverview(); loadShots(); } }, 120000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
