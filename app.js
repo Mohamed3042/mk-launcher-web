@@ -9,6 +9,7 @@ import * as source from "./source.js";
 import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
 import * as HM from "./home-rules.js";
+import * as CR from "./changes-rules.js";
 
 const BACKUP = source.BACKUP; // the GitHub Pages copy: reads the PC's last snapshot, greys out what needs the PC
 
@@ -432,7 +433,7 @@ function repoApp(repoName) {
 }
 function lineText(c) { return c.plain || c.msg || ""; }
 function updateLines(sinceMs) {
-  return (S.github?.repos || []).filter((r) => !/brain$/i.test(r.name))
+  return (S.github?.repos || []).filter((r) => CR.isWork(r.name))
     .flatMap((r) => (r.recent || []).map((c) => ({ ...c, repo: r.name, at: Date.parse(c.date) })))
     .filter((c) => c.at >= sinceMs).sort((a, b) => b.at - a.at);
 }
@@ -522,12 +523,20 @@ function changeCard(c) {
     <div class="tag">${g("split")}${c.size === "phone" ? "Phone" : "PC"} · tap to compare with a slider</div></div>`;
 }
 
+// One app's updates on one day of the timeline: its name, then its newest five lines.
+function updateGroup(list) {
+  const app = repoApp(list[0].repo);
+  const name = app ? app.name : humanRepo(list[0].repo);
+  return `<div class="plain-group"><div class="plain-row" data-act="repo" data-repo="${esc(list[0].repo)}" role="button" tabindex="0">${repoIcon(list[0].repo)}<span class="main"><span class="top"><span class="name" dir="auto">${esc(name)}</span><span class="when">${list.length} update${list.length > 1 ? "s" : ""}</span></span></span></div>` +
+    list.slice(0, 5).map((c) => `<a class="plain-line" href="${esc(c.url)}" target="_blank" rel="noopener" title="${esc(c.msg)}"><span>${esc(lineText(c))}</span><span class="when">${esc(new Date(c.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</span></a>`).join("") + `</div>`;
+}
+
 function changesTimeline() {
   const repos = S.github?.repos || [];
   const days = {};
   const add = (key, kind, item) => { (days[key] ||= { visual: [], repos: {} }); if (kind === "visual") days[key].visual.push(item); else (days[key].repos[item.repo] ||= []).push(item); };
   if (S.changesFilter !== "commits") for (const c of S.shots.changes || []) add(dayKey(c.t * 1000), "visual", c);
-  if (S.changesFilter !== "visual") for (const r of repos) if (!/brain$/i.test(r.name)) for (const c of r.recent || []) add(dayKey(Date.parse(c.date)), "commit", { ...c, repo: r.name, repoUrl: r.url });
+  if (S.changesFilter !== "visual") for (const r of repos) if (CR.isWork(r.name)) for (const c of r.recent || []) add(dayKey(Date.parse(c.date)), "commit", { ...c, repo: r.name, repoUrl: r.url });
   const keys = Object.keys(days).sort().reverse().slice(0, 21);
   const chips = [["all", "Everything"], ["visual", "Pictures"], ["commits", "Updates"]].map(([v, l]) => `<button class="chip" data-act="changes-filter" data-v="${v}" aria-pressed="${S.changesFilter === v}">${l}</button>`).join("");
   let out = `<div class="chips" style="margin-top:4px">${chips}</div>`;
@@ -536,21 +545,19 @@ function changesTimeline() {
   }
   for (const k of keys) {
     const d = days[k];
-    out += `<div class="day"><h3>${esc(dayLabel(k))}</h3>`;
-    if (d.visual.length) out += `<div class="change-grid">${d.visual.map(changeCard).join("")}</div>`;
     const all = Object.values(d.repos).flat();
     const quiet = all.filter((c) => c.visible === false).length;
     const byRepo = new Map();
     for (const c of all.filter((c) => c.visible !== false).sort((a, b) => Date.parse(b.date) - Date.parse(a.date))) byRepo.set(c.repo, [...(byRepo.get(c.repo) || []), c]);
-    if (byRepo.size || quiet) {
-      out += `<div class="plain-feed" style="margin-top:${d.visual.length ? 12 : 0}px">${[...byRepo.values()].map((list) => {
-        const app = repoApp(list[0].repo);
-        const name = app ? app.name : humanRepo(list[0].repo);
-        return `<div class="plain-group"><div class="plain-row" data-act="repo" data-repo="${esc(list[0].repo)}" role="button" tabindex="0">${repoIcon(list[0].repo)}<span class="main"><span class="top"><span class="name" dir="auto">${esc(name)}</span><span class="when">${list.length} update${list.length > 1 ? "s" : ""}</span></span></span></div>` +
-          list.slice(0, 5).map((c) => `<a class="plain-line" href="${esc(c.url)}" target="_blank" rel="noopener" title="${esc(c.msg)}"><span>${esc(lineText(c))}</span><span class="when">${esc(new Date(c.date).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</span></a>`).join("") + `</div>`;
-      }).join("")}${quiet ? `<div class="quiet-line">${g("settings")}<span>${quiet} behind-the-scenes update${quiet > 1 ? "s" : ""} · no visible change</span></div>` : ""}</div>`;
+    // pictures and updates by time, newest first
+    const parts = CR.dayRuns(d.visual, [...byRepo.values()]).map((run) =>
+      run.kind === "pictures" ? ["change-grid", run.items.map(changeCard).join("")] : ["plain-feed", run.items.map(updateGroup).join("")]);
+    if (quiet) {
+      const line = `<div class="quiet-line">${g("settings")}<span>${quiet} behind-the-scenes update${quiet > 1 ? "s" : ""} · no visible change</span></div>`;
+      const last = parts[parts.length - 1];
+      if (last?.[0] === "plain-feed") last[1] += line; else parts.push(["plain-feed", line]);
     }
-    out += `</div>`;
+    out += `<div class="day"><h3>${esc(dayLabel(k))}</h3>${parts.map(([cls, html], i) => `<div class="${cls}"${i ? ' style="margin-top:12px"' : ""}>${html}</div>`).join("")}</div>`;
   }
   if (!keys.length) out += `<div class="note" style="margin-top:14px">${g("history")}<div>Nothing yet. GitHub data loads within a minute of the launcher starting.</div></div>`;
   return out;
