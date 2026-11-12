@@ -5,6 +5,7 @@ import { createReels } from "./reels.js";
 import { createSettings } from "./settings.js";
 import { createCinema } from "./cinema.js";
 import { createPlans } from "./plans.js";
+import { createWaiting } from "./waiting.js";
 import * as source from "./source.js";
 import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
@@ -20,11 +21,11 @@ const g = (name, cls = "") => `<svg class="g ${cls}" viewBox="0 0 24 24" aria-hi
 const SERIES = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)", "var(--s7)", "var(--s8)", "var(--s6)"];
 // iPhone home-screen app: app.css keeps the page 1 px taller than the window so iOS gives it the whole screen.
 if ("standalone" in navigator && navigator.standalone === true) document.documentElement.classList.add("ios-app");
-const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "cinema", "plans", "settings", "connect"];
-const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", cinema: "Cinema", plans: "Plans", settings: "Settings", connect: "Connect" };
+const ROUTES = ["home", "apps", "reels", "changes", "github", "pc", "cinema", "plans", "waiting", "settings", "connect"];
+const TITLES = { home: "Home", apps: "Apps", reels: "Reels", changes: "Changes", github: "GitHub", pc: "PC", cinema: "Cinema", plans: "Plans", waiting: "Waiting", settings: "Settings", connect: "Connect" };
 const NAV = [ // desktop sidebar
   ["home", "Home", "home"], ["apps", "Apps", "apps"], ["reels", "Reels", "reels"], ["changes", "Changes", "changes"],
-  ["github", "GitHub", "github"], ["pc", "PC", "pc"], ["cinema", "Cinema", "film"], ["plans", "Plans", "map"], ["settings", "Settings", "settings"],
+  ["github", "GitHub", "github"], ["pc", "PC", "pc"], ["cinema", "Cinema", "film"], ["plans", "Plans", "map"], ["waiting", "Waiting", "tack"], ["settings", "Settings", "settings"],
 ];
 const TABS = [ // phone tab bar: five at most; GitHub and PC sit in "More places" on Home
   ["home", "Home", "home"], ["reels", "Reels", "reels"], ["apps", "Apps", "apps"], ["changes", "Changes", "changes"],
@@ -196,8 +197,10 @@ const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, g
   redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
 const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup: BACKUP,
   liveOrigin: () => S.liveOrigin, redraw: () => { if (["plans", "home"].includes(S.route) && !S.q) render(); } });
+const waiting = createWaiting({ $, esc, api, post, localGet, localSet, backup: BACKUP,
+  redraw: () => { if (["waiting", "home"].includes(S.route) && !S.q) render(); } });
 const HOME_LIGHT = "#c98a3c"; // the header photo's golden hour
-const MORE = [["#/plans", "Plans", "map"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
+const MORE = [["#/plans", "Plans", "map"], ["#/waiting", "Waiting", "tack"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
 const views = {
   // Home (the owner's Milk concept, 28 Oct 2026): a golden-hour photo header, his main app on glass over it, pinned
   // apps, the plans, Today's focus and Recent activity; What changed beside them on a wide screen.
@@ -206,7 +209,9 @@ const views = {
     const main = pins[0] || S.recents.map((r) => S.byId[r.id]).find(Boolean); // his main app: the first pin, else the last one opened
     const down = S.apps.filter((a) => a.type === "app" && ["down", "starting"].includes(stateOf(a)));
     document.documentElement.style.setProperty("--glow", HOME_LIGHT); // on Home the photo lights the room; the main card keeps its app's light
-    let left = pinsSection(pins) + plans.homeRail(); // the plans never show in the backup
+    const wline = waiting.homeLine(); // one quiet line when something waits on him; nothing when it is 0
+    let left = (wline ? `<a class="home-waiting" href="#/waiting">${g("tack")}<span>${esc(wline)}</span>${g("chevron-right")}</a>` : "")
+      + pinsSection(pins) + plans.homeRail(); // the plans never show in the backup
     const pair = plans.homeFocus() + homeActivity();
     if (pair) left += `<div class="home-pair">${pair}</div>`;
     if (down.length) {
@@ -282,6 +287,11 @@ const views = {
   plans() {
     S.after.push(() => plans.mount());
     return plans.render();
+  },
+
+  waiting() {
+    S.after.push(() => waiting.mount());
+    return waiting.render();
   },
 
   pc() {
@@ -1126,10 +1136,11 @@ function render() {
   const view = $("#view");
   S.after = [];
   document.documentElement.classList.toggle("route-connect", S.route === "connect");
-  const head = S.q || ["home", "reels", "connect", "plans"].includes(S.route) ? "" : `<h1 class="page-title">${esc(TITLES[S.route])}</h1>`;
+  const head = S.q || ["home", "reels", "connect", "plans", "waiting"].includes(S.route) ? "" : `<h1 class="page-title">${esc(TITLES[S.route])}</h1>`;
   if (S.q || S.route !== "reels") reels.unmount();
   if (S.q || S.route !== "cinema") cinema.unmount();
   if (S.q || S.route !== "plans") plans.unmount();
+  if (S.q || S.route !== "waiting") waiting.unmount();
   C.hideTip(); // the charts it pointed at are about to be replaced
   view.innerHTML = S.q ? searchView() : head + views[S.route]();
   runAfter();
@@ -1188,7 +1199,7 @@ function schedulePoll(ms) {
       if (before !== after) {
         renderShell();
         // Reels and Settings show no app status: never redraw them under his thumb
-        if (!S.q && !["reels", "settings", "cinema", "plans"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
+        if (!S.q && !["reels", "settings", "cinema", "plans", "waiting"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
         if (S.panelApp) refreshPanelStatus();
       }
     }
@@ -1220,6 +1231,7 @@ function route() {
   if (S.route === "github" || S.route === "changes") loadGithub();
   if (S.route === "changes") loadShots();
   if (S.route === "plans") plans.load();
+  if (S.route === "waiting" || S.route === "home") waiting.load();
 }
 
 // ---------- events ----------
@@ -1381,7 +1393,7 @@ async function boot() {
   setInterval(() => {
     if (document.visibilityState !== "visible") return;
     loadOverview(); loadShots(); loadChanges();
-    if (S.route === "home") plans.load(); // the Plans page keeps its own timer
+    if (S.route === "home") { plans.load(); waiting.load(); } // the Plans and Waiting pages keep their own timers
   }, 120000);
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 }

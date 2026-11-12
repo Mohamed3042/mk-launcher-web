@@ -1,0 +1,124 @@
+/* Waiting: a paper object. The cream page, sepia ink, brass and wax stay the same in both themes (DESIGN.md's
+   deliberate exception); only the room around the page follows the theme. */
+@font-face { font-family: "Caveat"; src: url("fonts/caveat-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "IM Fell English SC"; src: url("fonts/im-fell-english-sc-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+
+.wt-room {
+  --wt-ink: #2b1d12; --wt-red: #8e1b1b; --wt-page: #efe3c8; --wt-slip: #f7efdc; --wt-rule: #5a3d24;
+  --wt-print: "IM Fell English SC", "Cormorant Garamond", "Noto Sans Arabic", Georgia, serif;
+  --wt-hand: "Caveat", "Noto Sans Arabic", "Segoe Print", cursive;
+  padding: 4px 0 calc(16px + env(safe-area-inset-bottom));
+}
+/* the phone hides the search dock here, so the page keeps only the tab bar's room below it */
+@media (max-width: 759px) { main#view:has(> .wt-room) { padding-bottom: calc(var(--tab-h) + var(--safe-b) + 16px); } }
+.wt-sheet {
+  position: relative; isolation: isolate; color: var(--wt-ink); background: var(--wt-page);
+  min-height: calc(100dvh - 186px); padding: 18px 12px 22px; border-radius: 3px;
+  box-shadow: 0 1px 2px rgb(40 24 8 / 0.35), 0 14px 40px -12px rgb(20 12 4 / 0.45);
+}
+.wt-sheet::before { /* paper grain */
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55; mix-blend-mode: multiply; border-radius: inherit;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .14 0 0 0 .3 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.wt-sheet::after { /* the thin double rule */
+  content: ""; position: absolute; inset: 8px; pointer-events: none; border: 1px solid var(--wt-rule);
+  outline: .5px solid var(--wt-rule); outline-offset: -5px;
+}
+.wt-date { font-family: var(--wt-print); font-size: 15px; letter-spacing: .08em; margin: 0 0 6px; padding-inline: 8px; }
+[lang="ar"] .wt-date, [lang="ar"] .wt-label { letter-spacing: 0; font-family: "Noto Sans Arabic", var(--wt-print); }
+
+.wt-groups { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.wt-group { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.wt-label {
+  font-family: var(--wt-print); font-weight: 400; font-size: 14px; letter-spacing: .16em; color: var(--wt-ink);
+  display: flex; align-items: center; gap: 8px; margin: 2px 0 4px;
+}
+.wt-label::before, .wt-label::after { content: ""; width: 24px; height: 1px; background: currentColor; opacity: .7; }
+.wt-you .wt-label { color: var(--wt-red); }
+
+.wt-slip {
+  all: unset; box-sizing: border-box; position: relative; display: block; max-width: 100%; margin: 2px 0;
+  transform: translateX(var(--dx)) rotate(var(--r)); filter: drop-shadow(1px 2px 1.6px rgb(60 35 10 / .38));
+  transition: transform .38s ease, opacity .38s ease, max-height .38s ease, margin .38s ease; max-height: 160px;
+}
+button.wt-slip { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset: 4px; }
+.wt-paper {
+  position: relative; display: flex; align-items: center; gap: 10px; background: var(--wt-slip); padding: 6px 15px 8px;
+}
+.wt-paper::after {
+  content: ""; position: absolute; inset: 0; opacity: .3; mix-blend-mode: multiply; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 .4 0 0 0 0 .28 0 0 0 0 .12 0 0 0 .5 -.1'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.wt-hand {
+  position: relative; font-family: var(--wt-hand); font-weight: 600; font-size: 22px; line-height: 1; color: var(--wt-ink);
+  overflow-wrap: anywhere; text-wrap: pretty;
+}
+.wt-hand.ar-text { font-size: 19px; line-height: 1.45; } /* Arabic falls back to Noto Sans Arabic, which needs room */
+.wt-slip.red .wt-hand { color: var(--wt-red); }
+.wt-slip.quiet .wt-paper { background: #e6dcc4; }
+.wt-slip.quiet .wt-hand { color: #7a6650; font-size: 20px; white-space: nowrap; }
+.wt-slip.quiet .wt-hand.ar-text { font-size: 18px; }
+.wt-day { /* a small ink stamp at the slip's end */
+  flex: none; font-family: var(--wt-print); font-size: 11px; letter-spacing: .06em; color: var(--wt-red); opacity: .8;
+  border: 1px solid currentColor; border-radius: 2px; padding: 1px 5px 0; transform: rotate(-4deg); white-space: nowrap;
+}
+.wt-pin { position: absolute; top: -5px; left: var(--pin); width: 16px; margin-left: -8px; transition: transform .45s ease-in, opacity .45s ease-in; }
+.wt-pin.wax { width: 21px; margin-left: -10px; top: -8px; }
+[dir="rtl"] .wt-pin { left: auto; right: var(--pin); margin-left: 0; margin-right: -8px; }
+[dir="rtl"] .wt-pin.wax { margin-right: -10px; }
+
+/* tapped: the line is struck through, the pin drops, then the slip leaves */
+.wt-hand::after {
+  content: ""; position: absolute; left: -4px; right: -4px; top: 55%; height: 2.5px; border-radius: 2px;
+  background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .35s ease-out;
+}
+[dir="rtl"] .wt-hand::after { transform-origin: right; }
+.wt-slip.struck .wt-hand::after { transform: scaleX(1); }
+.wt-slip.struck .wt-pin { transform: translateY(40px) rotate(70deg); opacity: 0; transition-delay: .3s; }
+.wt-slip.struck { transform: translateX(var(--dx)) rotate(calc(var(--r) * -2.5)) translateY(2px); }
+.wt-slip.gone { opacity: 0; max-height: 0; margin: 0; transform: translateX(var(--dx)) rotate(var(--r)) translateY(30px); }
+
+.wt-undo {
+  all: unset; cursor: pointer; font-family: var(--wt-hand); font-weight: 600; font-size: 22px; color: var(--wt-red);
+  text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; padding: 2px 10px; margin-top: 2px;
+}
+.wt-undo:focus-visible { outline: 2px dashed var(--wt-red); outline-offset: 2px; }
+
+.wt-stub { display: flex; justify-content: center; margin-top: 12px; transform: rotate(-1deg); filter: drop-shadow(1px 2px 1.5px rgb(60 35 10 / .35)); }
+.wt-stub span {
+  display: block; max-width: 100%; background: #f2e4c2; padding: 6px 18px 5px; font-family: "Cormorant Garamond", var(--wt-print);
+  font-weight: 500; font-size: 17px; color: var(--wt-ink); border: 1px solid #8a6a48; outline: 3px solid #f2e4c2;
+  -webkit-mask: radial-gradient(circle 5px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 5px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle 5px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 5px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+}
+.wt-one { padding-top: 40px; }
+
+@media (min-width: 900px) {
+  .wt-room { padding: 8px 0 24px; }
+  .wt-sheet { display: flex; flex-direction: column; min-height: calc(100dvh - 200px); padding: 30px 32px 40px; }
+  .wt-date { font-size: 21px; margin-bottom: 24px; }
+  .wt-groups { flex-direction: row; align-items: flex-start; justify-content: space-evenly; gap: 24px; margin-top: auto; }
+  .wt-group { flex: 1 1 0; gap: 8px; }
+  .wt-running { flex-grow: .7; }
+  .wt-stub { margin-bottom: auto; }
+  .wt-one { margin-bottom: auto; }
+  .wt-label { font-size: 17px; margin-bottom: 8px; }
+  .wt-hand { font-size: 26px; }
+  .wt-slip.quiet .wt-hand { font-size: 23px; }
+  .wt-paper { padding: 8px 18px 10px; }
+  .wt-stub { margin-top: 44px; }
+  .wt-stub span { font-size: 19px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wt-slip, .wt-pin, .wt-hand::after { transition: none; }
+}
+
+/* Home: one quiet line when something waits on him (the launcher's own look, not paper) */
+.home-waiting {
+  display: flex; align-items: center; gap: 8px; width: fit-content; min-height: 44px; margin: 6px 0 2px; padding: 0 4px;
+  color: var(--ink-2); text-decoration: none; font-size: 15px;
+}
+.home-waiting .g { width: 17px; height: 17px; }
+.home-waiting .g:last-child { width: 15px; height: 15px; opacity: .6; }
+.home-waiting:hover span { text-decoration: underline; text-underline-offset: 3px; }
