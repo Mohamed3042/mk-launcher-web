@@ -222,7 +222,7 @@ const WRITE_REASON = { "/api/start": "start", "/api/pins": "pins", "/api/pc/open
   "/api/github/refresh": "refresh", "/api/shots/snap": "snap", "/api/news/save": "save", "/api/news/unsave": "save",
   "/api/news/refresh": "news", "/api/settings": "settings", "/api/news/invites": "invite", "/api/news/invites/remove": "invite",
   "/api/cinema/rank": "cinema", "/api/cinema/publish": "cinema", "/api/plans/sync": "plans",
-  "/api/plans/edit": "plans", "/api/plans/seen": "plans", "/api/plans/focus": "plans", "/api/waiting/done": "waitdone", "/api/waiting/put": "waitdone" };
+  "/api/plans/edit": "plans", "/api/plans/seen": "plans", "/api/plans/focus": "plans", "/api/waiting/done": "waitdone", "/api/waiting/cancel": "waitdone", "/api/waiting/put": "waitdone" };
 export function backupWrite(path, body, local) {
   const { route } = query(path);
   if (route === "/api/reels/seen") {

@@ -75,10 +75,13 @@ export async function tryKey(value) {
 }
 
 // ---------- the snapshot ----------
+// One cached copy for the whole shell: the key comes from this module's place, not the page's, so the launcher and the
+// Waiting page of its own (web/waiting/) share it, like they share the stored ETag. (Two copies under one ETag left one stale.)
+const SNAP_KEY = new URL("./_backup/snapshot.json", import.meta.url).href;
 async function readCached() {
   try {
     const c = await caches.open(DATA_CACHE);
-    const hit = await c.match(here("./_backup/snapshot.json"));
+    const hit = await c.match(SNAP_KEY);
     return hit ? R.validateSnapshot(await hit.json()) : null;
   } catch { return null; }
 }
@@ -97,7 +100,7 @@ export async function fetchSnapshot() {
   if (etag) ls.set(K.etag, etag);
   try {
     const c = await caches.open(DATA_CACHE);
-    await c.put(here("./_backup/snapshot.json"), new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } }));
+    await c.put(SNAP_KEY, new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } }));
   } catch { /* storage full or blocked: it still works for this visit */ }
   return data;
 }

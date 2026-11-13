@@ -9,10 +9,14 @@ export const langOf = (saved, navLang = "") => (saved === "ar" || saved === "en"
 const WORDS = {
   en: { title: "Waiting", you: "Waiting on you", running: "Running", coming: "Coming",
     "empty.you": "Nothing waits on you", "empty.running": "Nothing is running", "empty.coming": "Nothing is coming",
-    undo: "Undo", backup: "This board reaches the backup with the next snapshot", offline: "Your PC didn't answer" },
+    undo: "Undo", backup: "This board reaches the backup with the next snapshot", offline: "Your PC didn't answer",
+    done: "done", cancelled: "crossed out", launcher: "Launcher",
+    help: "Draw a line through a slip when it is done, or a cross when you drop it. Tap a marked slip to lift the ink. Keys: Enter done, Delete cross out, Z lift." },
   ar: { title: "في الانتظار", you: "ينتظرك أنت", running: "يعمل الآن", coming: "قادم",
     "empty.you": "لا شيء ينتظرك", "empty.running": "لا شيء يعمل الآن", "empty.coming": "لا شيء قادم",
-    undo: "تراجع", backup: "اللوحة تصل إلى النسخة الاحتياطية مع اللقطة القادمة", offline: "جهازك لم يرد" },
+    undo: "تراجع", backup: "اللوحة تصل إلى النسخة الاحتياطية مع اللقطة القادمة", offline: "جهازك لم يرد",
+    done: "تم", cancelled: "مشطوب", launcher: "المشغّل",
+    help: "ارسم خطًا على الورقة حين تنتهي منها، أو علامة × حين تلغيها. المس ورقة معلّمة لترفع الحبر. المفاتيح: Enter تم، Delete شطب، Z رفع." },
 };
 export const text = (lang) => (key) => (WORDS[lang] || WORDS.en)[key] ?? WORDS.en[key] ?? key;
 
@@ -23,7 +27,22 @@ export function grouped(items) {
   return out;
 }
 
-export const waitCount = (board) => grouped(board?.items).you.length;
+// Only open slips wait on him; a struck or crossed one rests on the page.
+export const waitCount = (board) => grouped(board?.items).you.filter((it) => !it.state || it.state === "open").length;
+
+// The one quiet count beside the date: "3 done today", "3 done · 1 crossed out today"; empty when nothing is marked.
+export function tallyLine({ done = 0, cancelled = 0 } = {}, lang = "en") {
+  if (!done && !cancelled) return "";
+  if (lang === "ar") return [done ? `${done} تم اليوم` : "", cancelled ? `${cancelled} مشطوب` : ""].filter(Boolean).join(" · ");
+  return [done ? `${done} done` : "", cancelled ? `${cancelled} crossed out` : ""].filter(Boolean).join(" · ") + " today";
+}
+
+// "2 marks wait for your PC": marks made here that the PC has not taken yet; empty at 0.
+export function pendingLine(n, lang = "en") {
+  if (!n) return "";
+  if (lang === "ar") return n === 1 ? "علامة واحدة تنتظر جهازك" : `${n} علامات تنتظر جهازك`;
+  return n === 1 ? "1 mark waits for your PC" : `${n} marks wait for your PC`;
+}
 
 // Home's one quiet line; empty when nothing waits on him.
 export function homeLine(n, lang = "en") {

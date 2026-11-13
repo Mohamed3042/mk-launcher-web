@@ -1,15 +1,18 @@
 // Offline shell: the launcher still opens (with the last known state) when the PC is asleep.
 // Paths are relative to this file, so the same worker runs on the PC (/) and on GitHub Pages (/mk-launcher-web/).
 // It caches only the public shell: never the API, never GitHub, never a request that carries a key.
-const SHELL = "mkl-shell-v15";
+const SHELL = "mkl-shell-v16";
 const SHOTS = "mkl-shots-v1";
 const OURS = ["mkl-shell-", "mkl-shots-"]; // other apps on the same origin (MK Cinema on Pages) keep their caches
 const FILES = [
   "./", "./index.html", "./app.css", "./app.js", "./charts.js", "./glyphs.js", "./manifest.webmanifest",
-  "./reels.js", "./reels.css", "./reels-prefs.js", "./cinema.js", "./cinema.css", "./cinema-rules.js", "./plans.js", "./plans.css", "./plans-rules.js", "./waiting.js", "./waiting.css", "./waiting-rules.js", "./home-rules.js", "./changes-rules.js","./settings.js", "./source.js", "./backup-rules.js", "./host.js", "./host-rules.js",
+  "./reels.js", "./reels.css", "./reels-prefs.js", "./cinema.js", "./cinema.css", "./cinema-rules.js", "./plans.js", "./plans.css", "./plans-rules.js", "./waiting.js", "./waiting.css", "./waiting-rules.js", "./waiting-ink.js", "./waiting-marks.js", "./connect.js", "./home-rules.js", "./changes-rules.js","./settings.js", "./source.js", "./backup-rules.js", "./host.js", "./host-rules.js",
   "./fonts/dm-sans-latin-400-normal.woff2", "./fonts/dm-sans-latin-600-normal.woff2",
   "./fonts/cormorant-garamond-latin-500-normal.woff2", "./fonts/caveat-latin-600-normal.woff2",
   "./fonts/im-fell-english-sc-latin-400-normal.woff2", "./icons/icon.svg", "./icons/backup.svg",
+  // the Waiting board's page of its own (its Home Screen icon opens it with no network at all)
+  "./waiting/", "./waiting/index.html", "./waiting/page.js", "./waiting/manifest.webmanifest", "./icons/waiting.svg",
+  "./icons/waiting-apple-touch-icon.png", "./icons/waiting-192.png",
   "./art/home-desert.webp", "./art/home-desert-phone.webp", // Home's header photo
   "./news/", "./news/index.html", "./news/news.js", "./news/news.css", "./news/story.js", "./news/rows.js",
   "./news/ambient.js", "./news/icons.js", "./news/invite.js", "./news/guests.js",

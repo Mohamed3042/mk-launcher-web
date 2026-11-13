@@ -7,6 +7,7 @@ import { createCinema } from "./cinema.js";
 import { createPlans } from "./plans.js";
 import { createWaiting } from "./waiting.js";
 import * as source from "./source.js";
+import { connectHtml, saveKey } from "./connect.js";
 import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
 import * as HM from "./home-rules.js";
@@ -198,7 +199,7 @@ const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, g
 const asOf = (lang) => (BACKUP ? source.asOf(S.snapAt, Date.now(), lang) : ""); // the backup pages' one quiet line
 const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup: BACKUP, asOf,
   liveOrigin: () => S.liveOrigin, redraw: () => { if (["plans", "home"].includes(S.route) && !S.q) render(); } });
-const waiting = createWaiting({ $, esc, api, post, localGet, localSet, backup: BACKUP, asOf,
+const waiting = createWaiting({ $, esc, api, post, localGet, localSet, backup: BACKUP, asOf, liveOrigin: () => source.liveOrigin(),
   redraw: () => { if (["waiting", "home"].includes(S.route) && !S.q) render(); } });
 const HOME_LIGHT = "#c98a3c"; // the header photo's golden hour
 const MORE = [["#/plans", "Plans", "map"], ["#/waiting", "Waiting", "tack"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
@@ -1401,27 +1402,7 @@ async function boot() {
 
 // ---------- the backup (GitHub Pages copy) ----------
 views.connect = function connectView() {
-  const e = S.connectError;
-  const cinema = S.cinemaOk;
-  return `<section class="connect" aria-labelledby="connect-h">
-    <div class="connect-card">
-      <img class="connect-logo" src="icons/backup.svg" alt="">
-      <h1 id="connect-h">Open your launcher backup</h1>
-      <p class="connect-lede">When your PC is off, this copy on GitHub shows what was last true: your apps and their status, what changed, and your reels. Paste a read-only GitHub key once.</p>
-      ${cinema ? `<button class="btn primary wide" type="button" data-act="connect-cinema">${g("sparkles")}Use my MK Cinema key</button>
-        <p class="connect-or"><span>or paste a new key</span></p>` : ""}
-      <form id="connect-form" autocomplete="off">
-        <label for="key">GitHub key</label>
-        <input id="key" type="password" placeholder="github_pat_…" autocapitalize="none" spellcheck="false" required aria-describedby="key-help${e ? " key-error" : ""}"${e ? ' aria-invalid="true"' : ""}>
-        <p id="key-help" class="sub">Stored only in this browser. It can only read the snapshot.</p>
-        ${e ? `<p class="connect-error" id="key-error" role="alert">${g("alert")}<span>${esc(e)}</span></p>` : ""}
-        <button class="btn ${cinema ? "" : "primary "}wide" type="submit"${S.connecting ? " disabled" : ""}>${S.connecting ? "Checking…" : e ? "Try again" : "Connect"}</button>
-      </form>
-      <section class="connect-steps" aria-label="How to make the key"><h2>Make the key</h2><ol>
-        <li><span><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">New fine-grained token ${g("external")}</a></span></li>
-        <li><span>Repository access: <b>Only select repositories</b>, then pick <b class="nowrap">${esc(source.REPO_NAME)}</b></span></li>
-        <li><span>Permissions, Contents: <b>Read-only</b>. Generate it, copy it, paste it above.</span></li></ol></section>
-    </div></section>`;
+  return connectHtml({ error: S.connectError, cinema: S.cinemaOk, connecting: S.connecting, g, esc });
 };
 
 function showConnect(error = "") {
@@ -1437,11 +1418,9 @@ function showConnect(error = "") {
 async function connectWith(value, from) {
   if (S.connecting) return;
   S.connecting = true; S.connectError = ""; render();
-  const r = await source.tryKey(from === "mkc" ? source.cinemaToken() : value);
+  const r = await saveKey(value, from);
   S.connecting = false;
   if (!r.ok) { S.connectError = r.message; render(); $("#key")?.focus(); return; }
-  try { source.saveToken(value, from); } catch (e) { S.connectError = e.message; render(); return; }
-  if (source.guest() && !source.guest().left) await source.leaveGuest(); // his own key: MK News is his again on this device
   toast(from === "mkc" ? "Connected with your MK Cinema key" : "Connected");
   location.hash = "#/home";
   await refreshBackup(true);

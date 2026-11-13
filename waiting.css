@@ -25,9 +25,15 @@
   outline: .5px solid var(--wt-rule); outline-offset: -5px;
 }
 .wt-date { font-family: var(--wt-print); font-size: 15px; letter-spacing: .08em; margin: 0 0 6px; padding-inline: 8px; }
-.wt-asof { font-family: var(--wt-print); font-size: 12.5px; opacity: .65; margin: -2px 0 6px; padding-inline: 8px; }
-.wt-slip.needs-pc { cursor: not-allowed; }
+.wt-asof, .wt-pending { font-family: var(--wt-print); font-size: 12.5px; opacity: .65; margin: -2px 0 6px; padding-inline: 8px; }
+.wt-pending:empty { display: none; }
+.wt-pending { color: var(--wt-red); opacity: .8; }
+.wt-tally { opacity: .62; font-size: .8em; letter-spacing: .04em; }
+.wt-tally:not(:empty)::before { content: " · "; }
 [lang="ar"] .wt-date, [lang="ar"] .wt-label { letter-spacing: 0; font-family: "Noto Sans Arabic", var(--wt-print); }
+
+/* the pen owns the paper: no text selection or callout under a stroke; a page scroll still starts here (pan-y) */
+.wt-sheet { touch-action: pan-y pinch-zoom; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 
 .wt-groups { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .wt-group { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -41,7 +47,7 @@
 .wt-slip {
   all: unset; box-sizing: border-box; position: relative; display: block; max-width: 100%; margin: 2px 0;
   transform: translateX(var(--dx)) rotate(var(--r)); filter: drop-shadow(1px 2px 1.6px rgb(60 35 10 / .38));
-  transition: transform .38s ease, opacity .38s ease, max-height .38s ease, margin .38s ease; max-height: 160px;
+  transition: transform .45s cubic-bezier(.3,.7,.3,1), opacity .45s ease, filter .45s ease;
 }
 button.wt-slip { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset: 4px; }
@@ -65,27 +71,34 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
   flex: none; font-family: var(--wt-print); font-size: 11px; letter-spacing: .06em; color: var(--wt-red); opacity: .8;
   border: 1px solid currentColor; border-radius: 2px; padding: 1px 5px 0; transform: rotate(-4deg); white-space: nowrap;
 }
-.wt-pin { position: absolute; top: -5px; left: var(--pin); width: 16px; margin-left: -8px; transition: transform .45s ease-in, opacity .45s ease-in; }
+.wt-pin { position: absolute; top: -5px; left: var(--pin); width: 16px; margin-left: -8px; transition: transform .45s ease, opacity .45s ease, filter .45s ease; }
 .wt-pin.wax { width: 21px; margin-left: -10px; top: -8px; }
 [dir="rtl"] .wt-pin { left: auto; right: var(--pin); margin-left: 0; margin-right: -8px; }
 [dir="rtl"] .wt-pin.wax { margin-right: -10px; }
 
-/* tapped: the line is struck through, the pin drops, then the slip leaves */
-.wt-hand::after {
-  content: ""; position: absolute; left: -4px; right: -4px; top: 55%; height: 2.5px; border-radius: 2px;
-  background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .35s ease-out;
-}
-[dir="rtl"] .wt-hand::after { transform-origin: right; }
-.wt-slip.struck .wt-hand::after { transform: scaleX(1); }
-.wt-slip.struck .wt-pin { transform: translateY(40px) rotate(70deg); opacity: 0; transition-delay: .3s; }
-.wt-slip.struck { transform: translateX(var(--dx)) rotate(calc(var(--r) * -2.5)) translateY(2px); }
-.wt-slip.gone { opacity: 0; max-height: 0; margin: 0; transform: translateX(var(--dx)) rotate(var(--r)) translateY(30px); }
+/* the ink: the settled hand-drawn line(s) a mark leaves, in the board's sepia, bleeding a touch into the paper */
+.wt-ink { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; } /* never the 300x150 default */
+.wt-stroke { fill: var(--wt-ink); fill-opacity: .93; stroke: var(--wt-ink); stroke-width: .7; stroke-opacity: .22; stroke-linejoin: round; filter: url(#wt-bleed); }
+.wt-line.fresh { animation: wt-dry .26s ease-out both; }
+@keyframes wt-dry { from { opacity: 0; } }
+.wt-slip.cancelled .wt-stroke { fill-opacity: .78; }
 
-.wt-undo {
-  all: unset; cursor: pointer; font-family: var(--wt-hand); font-weight: 600; font-size: 22px; color: var(--wt-red);
-  text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px; padding: 2px 10px; margin-top: 2px;
-}
-.wt-undo:focus-visible { outline: 2px dashed var(--wt-red); outline-offset: 2px; }
+/* done: the slip rests: it settles a touch lower and flatter, the wax seal dims, the writing stays readable */
+.wt-slip.done { transform: translateX(var(--dx)) rotate(var(--r)) translateY(2px); filter: drop-shadow(.5px 1px .8px rgb(60 35 10 / .26)); }
+.wt-slip.done .wt-paper { background: #f1e7d0; }
+.wt-slip.done .wt-hand { opacity: .74; }
+.wt-slip.done .wt-day { opacity: .45; }
+.wt-slip.done .wt-pin { transform: scale(.9); filter: saturate(.35) brightness(1.08); opacity: .72; }
+/* crossed out: quieter still, a voided ticket: greyed paper, faded writing and pin, lying flat */
+.wt-slip.cancelled { opacity: .66; transform: translateX(var(--dx)) rotate(calc(var(--r) * 1.6)) translateY(3px); filter: grayscale(.55) drop-shadow(.3px .6px .5px rgb(60 35 10 / .2)); }
+.wt-slip.cancelled .wt-paper { background: #e3d8bf; }
+.wt-slip.cancelled .wt-hand, .wt-slip.cancelled.red .wt-hand { color: #6f5d49; opacity: .7; }
+.wt-slip.cancelled .wt-day { opacity: .35; }
+.wt-slip.cancelled .wt-pin { filter: grayscale(1); opacity: .5; transform: scale(.85); }
+
+/* the wet ink under the finger, over the whole window while he draws */
+.wt-wet { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 80; }
+.wt-haptic { position: fixed; left: -100px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
 .wt-stub { display: flex; justify-content: center; margin-top: 12px; transform: rotate(-1deg); filter: drop-shadow(1px 2px 1.5px rgb(60 35 10 / .35)); }
 .wt-stub span {
@@ -113,7 +126,33 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
   .wt-stub span { font-size: 19px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .wt-slip, .wt-pin, .wt-hand::after { transition: none; }
+  .wt-slip, .wt-pin { transition: none; }
+  .wt-line.fresh { animation: none; }
+}
+
+/* waiting/: the board alone, full screen, saved to the Home Screen; the paper reaches the edges on a phone */
+html.wt-page, html.wt-page body { background: #2a2119; overscroll-behavior: none; }
+html.wt-page body::before, html.wt-page body::after { display: none; }
+html.wt-page main#view { padding: 0; min-height: 100dvh; }
+html.wt-page .wt-room { padding: 0; min-height: 100dvh; display: flex; }
+html.wt-page .wt-sheet { flex: 1; min-height: 100dvh; border-radius: 0; box-shadow: none;
+  padding: calc(env(safe-area-inset-top) + 20px) calc(env(safe-area-inset-right) + 12px) calc(env(safe-area-inset-bottom) + 28px) calc(env(safe-area-inset-left) + 12px); }
+html.wt-page .wt-sheet::after { inset: calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 8px) calc(env(safe-area-inset-bottom) + 8px) calc(env(safe-area-inset-left) + 8px); }
+.wt-corner {
+  position: fixed; z-index: 5; top: calc(env(safe-area-inset-top) + 14px); inset-inline-end: calc(env(safe-area-inset-right) + 16px);
+  display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 6px;
+  font-family: "IM Fell English SC", Georgia, serif; font-size: 13px; letter-spacing: .08em; color: #5a3d24; text-decoration: none; opacity: .75;
+}
+.wt-corner svg { width: 14px; height: 14px; }
+.wt-corner:hover, .wt-corner:focus-visible { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
+.wt-corner:focus-visible { outline: 2px dashed #8e1b1b; outline-offset: 2px; }
+html.wt-page .wt-date { padding-inline-end: 96px; }
+@media (min-width: 900px) {
+  html.wt-page .wt-room { padding: 28px; }
+  html.wt-page .wt-sheet { min-height: calc(100dvh - 56px); border-radius: 3px; padding: 34px 36px 44px;
+    box-shadow: 0 1px 2px rgb(0 0 0 / .4), 0 24px 60px -18px rgb(0 0 0 / .6); }
+  html.wt-page .wt-sheet::after { inset: 8px; }
+  .wt-corner { top: 44px; inset-inline-end: 56px; }
 }
 
 /* Home: one quiet line when something waits on him (the launcher's own look, not paper) */
@@ -124,3 +163,8 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
 .home-waiting .g { width: 17px; height: 17px; }
 .home-waiting .g:last-child { width: 15px; height: 15px; opacity: .6; }
 .home-waiting:hover span { text-decoration: underline; text-underline-offset: 3px; }
+/* a phone: the quiet count sits under the date instead of wrapping beside it */
+@media (max-width: 520px) {
+  .wt-tally { display: block; margin-top: 3px; }
+  .wt-tally:not(:empty)::before { content: none; }
+}
