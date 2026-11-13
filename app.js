@@ -195,9 +195,10 @@ const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () =>
 const host = createHost({ esc, g, toast });
 const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP, owner: source.OWNER,
   redraw: () => { if (S.route === "cinema" && !S.q) render(); } });
-const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup: BACKUP,
+const asOf = (lang) => (BACKUP ? source.asOf(S.snapAt, Date.now(), lang) : ""); // the backup pages' one quiet line
+const plans = createPlans({ $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup: BACKUP, asOf,
   liveOrigin: () => S.liveOrigin, redraw: () => { if (["plans", "home"].includes(S.route) && !S.q) render(); } });
-const waiting = createWaiting({ $, esc, api, post, localGet, localSet, backup: BACKUP,
+const waiting = createWaiting({ $, esc, api, post, localGet, localSet, backup: BACKUP, asOf,
   redraw: () => { if (["waiting", "home"].includes(S.route) && !S.q) render(); } });
 const HOME_LIGHT = "#c98a3c"; // the header photo's golden hour
 const MORE = [["#/plans", "Plans", "map"], ["#/waiting", "Waiting", "tack"], ["#/github", "GitHub", "github"], ["#/pc", "PC", "pc"], ["#/cinema", "Cinema", "film"], ["news/", "MK News", "news"]];
@@ -1451,6 +1452,7 @@ async function loadAllFromSnapshot() {
   await Promise.all([loadGithub(), loadOverview()]);
   S.snapAt = source.snapshotAt();
   S.liveOrigin = source.liveOrigin();
+  await Promise.all([waiting.load(), plans.load()]); // the board and the plans come from the same snapshot
   S.loaded = true;
   if (S.route !== "connect") render();
   loadShots();

@@ -11,7 +11,7 @@ import * as I from "./news/invite.js";
 const meta = (n) => globalThis.document?.querySelector(`meta[name="${n}"]`)?.content || "";
 export const MODE = R.chooseMode(meta("mkl-mode"));
 export const BACKUP = MODE === "backup";
-export const { REASON, NeedsPc, needsPc, bannerText, whenWords, clock, BACKUP_URL } = R;
+export const { REASON, NeedsPc, needsPc, bannerText, whenWords, clock, asOf, BACKUP_URL } = R;
 const REPO = meta("mkl-snapshot") || `Mohamed3042/${R.SNAPSHOT_REPO}`;
 export const OWNER = REPO.split("/")[0]; // his GitHub login, in the case GitHub shows it
 export const REPO_NAME = REPO.split("/").pop();

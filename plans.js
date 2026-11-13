@@ -1,4 +1,5 @@
-// Plans: living business plans, read from the private plans repo through the PC (never the backup).
+// Plans: living business plans, read from the private plans repo through the PC. In the backup the same page reads the
+// snapshot the PC wrote (read-only, one "As of" line); anything that would change a plan says it needs the PC.
 // A plan's page has six tabs: Overview (the hero card with the lit launch line, the next action, "What needs you" and
 // the plan in layers), Decisions, Money, System map (every part, by status), Evidence and Where it lives. A part, a
 // stop, a layer or a decision opens as the side panel on a computer and the bottom sheet on a phone. "Changed since
@@ -23,7 +24,7 @@ const TICK = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12
 const TAB_EYE = { decisions: "eye_decisions", money: "eye_money", map: "eye_map", evidence: "eye_evidence", where: "eye_where" };
 
 export function createPlans(d) {
-  const { $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup, redraw, liveOrigin } = d;
+  const { $, $$, esc, g, api, post, toast, openPanel, closePanel, offlineBar, localGet, localSet, backup, redraw, liveOrigin, asOf = () => "" } = d;
   const P = { data: null, error: "", needsPc: false, cachedAt: 0, loaded: false, timer: null, id: null, tab: "overview", sig: "",
     filter: localGet("plansFilter", "all"), expanded: localGet("plansExpanded", false), lang: R.langOf(localGet("plansLang", ""), globalThis.navigator?.language),
     shown: null, baseline: new Set(), focus: null, view: localGet("plansView", "map"), node: "", depth: 0, zoom: 1, ro: null,
@@ -50,7 +51,7 @@ export function createPlans(d) {
       const ticked = JSON.stringify(data.focus || {}) !== JSON.stringify(P.data?.focus || {}); // his other device ticked something
       P.error = ""; P.needsPc = false; P.cachedAt = 0; P.data = data; P.sig = sig; P.loaded = true;
       P.base = structuredClone(data); // the PC's copy as it is, before any edit made on top of it
-      localSet("plans", { data, at: Date.now() });
+      if (!backup) localSet("plans", { data, at: Date.now() }); // the backup never keeps the plans on the device
       if (fresh) redraw();
       else { touch(); if (ticked) paintFocus(); }
     } catch (e) {
@@ -323,7 +324,8 @@ export function createPlans(d) {
       <span class="grow"></span>
       ${ch && P.tab !== "overview" ? `<a class="pln-chpill" href="${R.href(e.id, "overview")}">${g("history")}<span>${esc(t(ch === 1 ? "changed1" : "changedN", { n: ch }))}</span></a>` : ""}
       ${e.plan ? `<nav class="seg pln-viewseg" aria-label="${esc(t("viewLabel"))}"><a href="${R.mapHref(e.id)}"${P.tab === R.VIEW ? ' aria-current="page"' : ""}>${g("map")}<span>${esc(t("viewMap"))}</span></a><a href="${R.href(e.id, "overview")}"${P.tab !== R.VIEW ? ' aria-current="page"' : ""}>${g("list")}<span>${esc(t("viewDetails"))}</span></a></nav>` : ""}
-      <span class="pln-barsync" data-tone="${sync.tone}">${g("github")}<span class="pln-sync-st" data-short="1" title="${esc(sync.title)}"><i aria-hidden="true"></i>${esc(sync.text)}</span></span>
+      ${backup ? `<span class="pln-barsync pln-asof" data-tone="ok" dir="auto">${esc(asOf(P.lang))}</span>`
+        : `<span class="pln-barsync" data-tone="${sync.tone}">${g("github")}<span class="pln-sync-st" data-short="1" title="${esc(sync.title)}"><i aria-hidden="true"></i>${esc(sync.text)}</span></span>`}
       ${syncButton()}${langBtn()}</div>`;
   }
 
@@ -566,7 +568,7 @@ export function createPlans(d) {
         state = r.state;
         sub = `<small class="pln-ck-sub">${esc({ done: t("st_done"), now: t("st_now"), todo: t("st_todo") }[r.state])}</small>`;
       }
-      const box = `<button type="button" class="pln-ck-box" role="checkbox" aria-checked="${r.done}" data-act="pln-tick" data-key="${r.key}" aria-label="${esc(t(r.done ? "untickIt" : "tickIt", { what: r.text }))}"${can ? "" : " disabled"}>${CHECK}</button>`;
+      const box = `<button type="button" class="pln-ck-box${backup ? " needs-pc" : ""}" role="checkbox" aria-checked="${r.done}" data-act="${backup ? "needs-pc" : "pln-tick"}"${backup ? ' data-why="plans"' : ""} data-key="${r.key}" aria-label="${esc(t(r.done ? "untickIt" : "tickIt", { what: r.text }))}"${can ? "" : backup ? ' aria-disabled="true"' : " disabled"}>${CHECK}</button>`;
       const label = `<span class="pln-ck-text" dir="auto">${esc(r.text)}</span>${sub}`;
       const text = s.kind === "layer" ? `<button type="button" class="pln-ck-t" data-act="pln-open-row" data-key="${r.key}">${label}</button>` : `<span class="pln-ck-t">${label}</span>`;
       const more = can ? `<button type="button" class="icon-btn pln-ck-more" data-act="pln-rowmenu" data-key="${r.key}" aria-haspopup="menu" aria-label="${esc(t("moreFor", { what: r.text }))}">${g("more")}</button>` : "";
@@ -574,7 +576,8 @@ export function createPlans(d) {
       return `<li class="pln-ck" data-state="${state}" data-key="${r.key}">${acts}<div class="pln-ck-row">${box}${text}${more}</div></li>`;
     }).join("");
     const empty = rows.length ? "" : `<p class="pln-ck-empty"><b>${esc(t("noReqs"))}</b>${can ? `<span>${esc(t(s.kind === "layer" ? "noPartsHint" : "noReqsHint"))}</span>` : ""}</p>`;
-    const add = !can ? `<p class="pln-ck-ro">${g("lock")}<span>${esc(t("readOnly"))}</span></p>`
+    const add = !can ? (backup ? `<button type="button" class="pln-ck-ro needs-pc" data-act="needs-pc" data-why="plans" aria-disabled="true">${g("lock")}<span>${esc(t("readOnly"))}</span></button>`
+        : `<p class="pln-ck-ro">${g("lock")}<span>${esc(t("readOnly"))}</span></p>`)
       : editing?.key === "new" ? `<div class="pln-ck-addrow" data-key="new">${ckForm(editing.draft ?? "", "add")}</div>`
         : `<button type="button" class="pln-ck-add" data-act="pln-addreq" data-key="add">${g("plus")}<span>${esc(t("addReq"))}</span></button>`;
     return `${empty}${rows.length ? `<ol class="pln-checks" aria-label="${esc(t("reqLabel", { what: subjectName(s) }))}">${items}</ol>` : ""}${add}`;

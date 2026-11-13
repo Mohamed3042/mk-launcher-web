@@ -9,10 +9,10 @@ export const langOf = (saved, navLang = "") => (saved === "ar" || saved === "en"
 const WORDS = {
   en: { title: "Waiting", you: "Waiting on you", running: "Running", coming: "Coming",
     "empty.you": "Nothing waits on you", "empty.running": "Nothing is running", "empty.coming": "Nothing is coming",
-    undo: "Undo", backup: "This board lives on your PC", offline: "Your PC didn't answer" },
+    undo: "Undo", backup: "This board reaches the backup with the next snapshot", offline: "Your PC didn't answer" },
   ar: { title: "في الانتظار", you: "ينتظرك أنت", running: "يعمل الآن", coming: "قادم",
     "empty.you": "لا شيء ينتظرك", "empty.running": "لا شيء يعمل الآن", "empty.coming": "لا شيء قادم",
-    undo: "تراجع", backup: "هذه اللوحة على جهازك فقط", offline: "جهازك لم يرد" },
+    undo: "تراجع", backup: "اللوحة تصل إلى النسخة الاحتياطية مع اللقطة القادمة", offline: "جهازك لم يرد" },
 };
 export const text = (lang) => (key) => (WORDS[lang] || WORDS.en)[key] ?? WORDS.en[key] ?? key;
 

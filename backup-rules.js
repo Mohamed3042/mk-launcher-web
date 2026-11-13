@@ -21,7 +21,9 @@ export const REASON = {
   news: "Checking for new stories needs your PC.",
   invite: "Inviting needs your PC.",
   cinema: "Changing the portfolio needs your PC, and it's offline.",
-  plans: "Plans stay private: they open in the live launcher and on GitHub, never in the backup.",
+  plans: "Plans are changed on your PC. Do it when it's back.",
+  waitold: "The board reaches this copy with the next snapshot from your PC.",
+  waitdone: "Ticking a slip off happens on your PC. Do it when it's back.",
   default: "This needs your PC, and it's offline.",
 };
 
@@ -88,6 +90,16 @@ export function whenWords(at, now = Date.now()) {
     : `on ${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} at`;
   return `${day} ${clock(ms)} (${agoWords(ms, now)})`;
 }
+// The one quiet line on the Waiting and Plans pages: "As of 17:48 (2 hours ago)", "As of yesterday 17:48 (19 hours ago)".
+export function asOf(at, now = Date.now(), lang = "en") {
+  if (!Number.isFinite(at) || at <= 0) return "";
+  const ms = at < 2e10 ? at * 1000 : at;
+  const d = new Date(ms), today = new Date(now), yest = new Date(now - 86400000);
+  const ar = lang === "ar";
+  const day = sameDay(d, today) ? "" : sameDay(d, yest) ? (ar ? "أمس " : "yesterday ")
+    : `${d.toLocaleDateString(ar ? "ar-EG" : "en-GB", { weekday: "short", day: "numeric", month: "short" })} `;
+  return ar ? `حتى ${day}${clock(ms)}` : `As of ${day}${clock(ms)} (${agoWords(ms, now)})`;
+}
 export function bannerText(at, now = Date.now()) {
   return `Your PC is offline. Showing what was true ${whenWords(at, now)}.`;
 }
@@ -125,6 +137,11 @@ export function validateSnapshot(data) {
   const changes = arr(obj(data.shots).changes).filter((c) => shot(c) && shot(c.before));
   const reels = obj(data.reels);
   const news = data.news ? obj(data.news) : null;
+  const slip = (i) => i && typeof i.id === "string" && ["you", "running", "coming"].includes(i.group) && typeof i.line === "string";
+  const waiting = data.waiting ? { items: arr(data.waiting.items).filter(slip), today: typeof data.waiting.today === "string" ? data.waiting.today : "" } : null;
+  const plans = data.plans && Array.isArray(data.plans.plans)
+    ? { plans: data.plans.plans.filter((e) => e && typeof e.id === "string").map((e) => ({ ...e, sig: null, seen_at: null, changes: null })),
+      words: obj(data.plans.words), sync: { source: "snapshot", state: "ok" } } : null;
   const linkOk = (it) => it && http(it.url) && (!it.image || http(it.image));
   return {
     ...data,
@@ -137,6 +154,7 @@ export function validateSnapshot(data) {
     reels: { ...reels, items: arr(reels.items).filter(linkOk), seen: arr(reels.seen), settings: obj(reels.settings), topics: arr(reels.topics) },
     news: news && { ...news, feed: arr(news.feed).filter(linkOk), repos: Object.fromEntries(Object.entries(obj(news.repos)).map(([k, v]) => [k, arr(v).filter(linkOk)])) },
     saved: arr(data.saved),
+    waiting, plans,
     cinema: obj(data.cinema).films ? { ...obj(data.cinema), films: arr(data.cinema.films).filter((f) => f && typeof f.id === "string" && typeof f.title === "string") } : null,
   };
 }
@@ -191,7 +209,8 @@ export function backupRead(snap, path, local = {}) {
     case "/api/cinema/job": return { kind: null, running: false, done: true };
     case "/api/cinema/film": case "/api/cinema/thumb": case "/api/cinema/poster": case "/api/cinema/video": throw new NeedsPc("cinema");
     case "/api/pc": case "/api/files": case "/api/files/raw": throw new NeedsPc("pc");
-    case "/api/plans": throw new NeedsPc("plans");
+    case "/api/waiting": if (!snap.waiting) throw new NeedsPc("waitold"); return { ...snap.waiting, updated: snap.at };
+    case "/api/plans": if (!snap.plans) throw new NeedsPc("plans"); return { ...snap.plans, template: null, focus: {} };
     case "/api/history": throw new NeedsPc("health");
     case "/api/github/stats": throw new NeedsPc("stats");
     default: throw new NeedsPc();
@@ -202,7 +221,8 @@ export function backupRead(snap, path, local = {}) {
 const WRITE_REASON = { "/api/start": "start", "/api/pins": "pins", "/api/pc/open": "pc", "/api/files/open": "pc",
   "/api/github/refresh": "refresh", "/api/shots/snap": "snap", "/api/news/save": "save", "/api/news/unsave": "save",
   "/api/news/refresh": "news", "/api/settings": "settings", "/api/news/invites": "invite", "/api/news/invites/remove": "invite",
-  "/api/cinema/rank": "cinema", "/api/cinema/publish": "cinema", "/api/plans/sync": "plans" };
+  "/api/cinema/rank": "cinema", "/api/cinema/publish": "cinema", "/api/plans/sync": "plans",
+  "/api/plans/edit": "plans", "/api/plans/seen": "plans", "/api/plans/focus": "plans", "/api/waiting/done": "waitdone", "/api/waiting/put": "waitdone" };
 export function backupWrite(path, body, local) {
   const { route } = query(path);
   if (route === "/api/reels/seen") {

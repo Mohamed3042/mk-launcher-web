@@ -1151,6 +1151,9 @@ button.pln-ck-t:hover .pln-ck-text { color: var(--plan-ink); }
 .pln-ck-empty span { color: var(--ink-3); font-size: 13.5px; }
 .pln-ck-ro { display: flex; align-items: center; gap: 8px; margin: 12px 2px 0; font-size: 13px; color: var(--ink-3); }
 .pln-ck-ro svg.g { width: 15px; height: 15px; flex: none; }
+button.pln-ck-ro { background: none; border: 0; padding: 0; font: inherit; cursor: not-allowed; text-align: start; }
+.pln-ck-box.needs-pc { cursor: not-allowed; opacity: 0.7; }
+.pln-asof { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; }
 /* the row's menu: Edit, Mark as done, Remove requirement */
 .pln-menu {
   position: fixed; z-index: 85; display: flex; flex-direction: column; min-width: 210px; padding: 6px; border-radius: 16px;

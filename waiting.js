@@ -1,6 +1,7 @@
 // Waiting (#/waiting): what he waits on and expects from the AI sessions, as torn paper slips pinned to a cream page.
 // A deliberate exception to the glass look (DESIGN.md): the page keeps its paper, sepia ink and brass in both themes.
-// The slips come from the PC (GET /api/waiting; AI sessions feed it with tools/waiting_put.py); never in the backup.
+// The slips come from the PC (GET /api/waiting; AI sessions feed it with tools/waiting_put.py). In the backup the same
+// page reads the snapshot, read-only, with one quiet "As of" line; tapping a red slip says it needs the PC.
 // Tapping a "Waiting on you" slip strikes it, its pin drops, it leaves and the PC is told (with a 5-second Undo).
 import * as R from "./waiting-rules.js";
 
@@ -11,21 +12,21 @@ const DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="t
   <radialGradient id="wt-wax" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#c2413a"/><stop offset=".55" stop-color="#8e1b1b"/><stop offset="1" stop-color="#4a0b0b"/></radialGradient></defs></svg>`;
 
 export function createWaiting(d) {
-  const { $, esc, api, post, localGet, localSet, backup, redraw } = d;
-  const W = { board: localGet("waiting", null), error: "", leaving: new Set(), gone: new Set(), undo: null, undoTimer: 0, timer: 0 };
+  const { $, esc, api, post, localGet, localSet, backup, redraw, asOf = () => "" } = d;
+  const W = { board: backup ? null : localGet("waiting", null), error: "", leaving: new Set(), gone: new Set(), undo: null, undoTimer: 0, timer: 0 };
   const lang = () => R.langOf(localGet("plansLang", ""), globalThis.navigator?.language);
   const t = (k) => R.text(lang())(k);
 
   async function load() {
-    if (backup) return;
     try {
       const board = await api("/api/waiting");
       const changed = JSON.stringify(board.items) !== JSON.stringify(W.board?.items) || board.today !== W.board?.today;
       W.board = board; W.error = "";
-      localSet("waiting", board);
+      if (!backup) localSet("waiting", board); // the backup never keeps the slips on the device
       if (changed) redraw();
     } catch (e) {
       W.error = e.message || "offline";
+      if (backup) W.board = null; // an older snapshot has no board: the page says it is coming
       redraw();
     }
   }
@@ -38,6 +39,7 @@ export function createWaiting(d) {
     const inner = `<span class="wt-paper" style="clip-path:${R.tornEdge(it.id || group)}"><span class="wt-hand${R.ARABIC.test(it.line) ? " ar-text" : ""}" dir="auto">${esc(it.line)}</span>${
       it.day ? `<span class="wt-day" dir="auto">${esc(it.day)}</span>` : ""}</span>${group === "you" && !quiet ? WAX : BRASS}`;
     const style = `--r:${h.rot}deg;--dx:${h.dx}px;--pin:${h.pin}%`;
+    if (tap && backup) return `<button type="button" class="${cls} needs-pc" style="${style}" data-act="needs-pc" data-why="waitdone" aria-disabled="true">${inner}</button>`;
     return tap ? `<button type="button" class="${cls}" style="${style}" data-wslip="${esc(it.id)}">${inner}</button>`
       : `<div class="${cls}" style="${style}">${inner}</div>`;
   }
@@ -52,7 +54,7 @@ export function createWaiting(d) {
     const ar = lang() === "ar";
     const dir = ar ? ' dir="rtl" lang="ar"' : ' dir="ltr" lang="en"';
     let body;
-    if (backup) body = `<div class="wt-groups wt-one">${slip({ line: t("backup") }, "coming", 0)}</div>`;
+    if (backup && !W.board) body = `<div class="wt-groups wt-one">${slip({ line: t("backup") }, "coming", 0)}</div>`;
     else {
       const g = R.grouped(W.board?.items);
       g.you = g.you.filter((it) => !W.gone.has(it.id));
@@ -61,7 +63,7 @@ export function createWaiting(d) {
       if (today) body += `<div class="wt-stub"><span dir="auto">${esc(today)}</span></div>`;
     }
     return `<div class="wt-room">${DEFS}<article class="wt-sheet"${dir}><h1 class="sr">${esc(t("title"))}</h1>
-      <p class="wt-date">${esc(R.dateLine(new Date(), lang()))}</p>${body}</article></div>`;
+      <p class="wt-date">${esc(R.dateLine(new Date(), lang()))}</p>${backup && W.board && asOf(lang()) ? `<p class="wt-asof" dir="auto">${esc(asOf(lang()))}</p>` : ""}${body}</article></div>`;
   }
 
   function strike(id) {
@@ -110,14 +112,14 @@ export function createWaiting(d) {
     view.removeEventListener("click", onClick);
     view.addEventListener("click", onClick);
     clearInterval(W.timer);
-    if (!backup) W.timer = setInterval(() => { if (document.visibilityState === "visible" && !W.leaving.size) load(); }, 30000);
+    W.timer = setInterval(() => { if (document.visibilityState === "visible" && !W.leaving.size) load(); }, 30000);
   }
   function unmount() {
     clearInterval(W.timer);
     $("#view")?.removeEventListener("click", onClick);
   }
 
-  const count = () => (backup ? 0 : R.waitCount(W.board));
+  const count = () => R.waitCount(W.board);
   const homeLine = () => R.homeLine(count(), lang());
   return { render, mount, unmount, load, count, homeLine };
 }
