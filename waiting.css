@@ -3,8 +3,25 @@
 @font-face { font-family: "Caveat"; src: url("fonts/caveat-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "IM Fell English SC"; src: url("fonts/im-fell-english-sc-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 
-.wt-room {
+/* Colour tokens (--wt-*). The paper look is the same in both themes (the exception above), so one set of values;
+   a theme restyles the board by overriding these only. On :root so the pins' SVG, the corner link and the page all see them. */
+:root {
+  /* ink, wax red and the cream page */
   --wt-ink: #2b1d12; --wt-red: #8e1b1b; --wt-page: #efe3c8; --wt-slip: #f7efdc; --wt-rule: #5a3d24;
+  --wt-paper-quiet: #e6dcc4; --wt-paper-done: #f1e7d0; --wt-paper-void: #e3d8bf;
+  --wt-hand-quiet: #7a6650; --wt-hand-void: #6f5d49;
+  --wt-stub-paper: #f2e4c2; --wt-stub-line: #8a6a48; --wt-mask-clear: #0000; --wt-mask-solid: #000;
+  --wt-desk: #2a2119;
+  /* shadows */
+  --wt-sheet-shadow-1: rgb(40 24 8 / 0.35); --wt-sheet-shadow-2: rgb(20 12 4 / 0.45);
+  --wt-slip-shadow: rgb(60 35 10 / .38); --wt-slip-shadow-done: rgb(60 35 10 / .26); --wt-slip-shadow-void: rgb(60 35 10 / .2);
+  --wt-stub-shadow: rgb(60 35 10 / .35);
+  --wt-desk-shadow-1: rgb(0 0 0 / .4); --wt-desk-shadow-2: rgb(0 0 0 / .6);
+  /* the brass pin (open items) and the red wax seal (waiting on him), used by the SVG in waiting.js */
+  --wt-brass-1: #f6e2a6; --wt-brass-2: #b08a3e; --wt-brass-3: #5c4318; --wt-brass-rim: #4a3410; --wt-brass-glint: #fff6d8;
+  --wt-wax-1: #c2413a; --wt-wax-2: #8e1b1b; --wt-wax-3: #4a0b0b; --wt-wax-rim: #3d0707; --wt-wax-ring: #5a0e0e; --wt-wax-mark: #e9a59a;
+}
+.wt-room {
   --wt-print: "IM Fell English SC", "Cormorant Garamond", "Noto Sans Arabic", Georgia, serif;
   --wt-hand: "Caveat", "Noto Sans Arabic", "Segoe Print", cursive;
   padding: 4px 0 calc(16px + env(safe-area-inset-bottom));
@@ -14,7 +31,7 @@
 .wt-sheet {
   position: relative; isolation: isolate; color: var(--wt-ink); background: var(--wt-page);
   min-height: calc(100dvh - 186px); padding: 18px 12px 22px; border-radius: 3px;
-  box-shadow: 0 1px 2px rgb(40 24 8 / 0.35), 0 14px 40px -12px rgb(20 12 4 / 0.45);
+  box-shadow: 0 1px 2px var(--wt-sheet-shadow-1), 0 14px 40px -12px var(--wt-sheet-shadow-2);
 }
 .wt-sheet::before { /* paper grain */
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: .55; mix-blend-mode: multiply; border-radius: inherit;
@@ -46,7 +63,7 @@
 
 .wt-slip {
   all: unset; box-sizing: border-box; position: relative; display: block; max-width: 100%; margin: 2px 0;
-  transform: translateX(var(--dx)) rotate(var(--r)); filter: drop-shadow(1px 2px 1.6px rgb(60 35 10 / .38));
+  transform: translateX(var(--dx)) rotate(var(--r)); filter: drop-shadow(1px 2px 1.6px var(--wt-slip-shadow));
   transition: transform .45s cubic-bezier(.3,.7,.3,1), opacity .45s ease, filter .45s ease;
 }
 button.wt-slip { cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -64,8 +81,8 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
 }
 .wt-hand.ar-text { font-size: 19px; line-height: 1.45; } /* Arabic falls back to Noto Sans Arabic, which needs room */
 .wt-slip.red .wt-hand { color: var(--wt-red); }
-.wt-slip.quiet .wt-paper { background: #e6dcc4; }
-.wt-slip.quiet .wt-hand { color: #7a6650; font-size: 20px; white-space: nowrap; }
+.wt-slip.quiet .wt-paper { background: var(--wt-paper-quiet); }
+.wt-slip.quiet .wt-hand { color: var(--wt-hand-quiet); font-size: 20px; white-space: nowrap; }
 .wt-slip.quiet .wt-hand.ar-text { font-size: 18px; }
 .wt-day { /* a small ink stamp at the slip's end */
   flex: none; font-family: var(--wt-print); font-size: 11px; letter-spacing: .06em; color: var(--wt-red); opacity: .8;
@@ -84,15 +101,15 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
 .wt-slip.cancelled .wt-stroke { fill-opacity: .78; }
 
 /* done: the slip rests: it settles a touch lower and flatter, the wax seal dims, the writing stays readable */
-.wt-slip.done { transform: translateX(var(--dx)) rotate(var(--r)) translateY(2px); filter: drop-shadow(.5px 1px .8px rgb(60 35 10 / .26)); }
-.wt-slip.done .wt-paper { background: #f1e7d0; }
+.wt-slip.done { transform: translateX(var(--dx)) rotate(var(--r)) translateY(2px); filter: drop-shadow(.5px 1px .8px var(--wt-slip-shadow-done)); }
+.wt-slip.done .wt-paper { background: var(--wt-paper-done); }
 .wt-slip.done .wt-hand { opacity: .74; }
 .wt-slip.done .wt-day { opacity: .45; }
 .wt-slip.done .wt-pin { transform: scale(.9); filter: saturate(.35) brightness(1.08); opacity: .72; }
 /* crossed out: quieter still, a voided ticket: greyed paper, faded writing and pin, lying flat */
-.wt-slip.cancelled { opacity: .66; transform: translateX(var(--dx)) rotate(calc(var(--r) * 1.6)) translateY(3px); filter: grayscale(.55) drop-shadow(.3px .6px .5px rgb(60 35 10 / .2)); }
-.wt-slip.cancelled .wt-paper { background: #e3d8bf; }
-.wt-slip.cancelled .wt-hand, .wt-slip.cancelled.red .wt-hand { color: #6f5d49; opacity: .7; }
+.wt-slip.cancelled { opacity: .66; transform: translateX(var(--dx)) rotate(calc(var(--r) * 1.6)) translateY(3px); filter: grayscale(.55) drop-shadow(.3px .6px .5px var(--wt-slip-shadow-void)); }
+.wt-slip.cancelled .wt-paper { background: var(--wt-paper-void); }
+.wt-slip.cancelled .wt-hand, .wt-slip.cancelled.red .wt-hand { color: var(--wt-hand-void); opacity: .7; }
 .wt-slip.cancelled .wt-day { opacity: .35; }
 .wt-slip.cancelled .wt-pin { filter: grayscale(1); opacity: .5; transform: scale(.85); }
 
@@ -100,12 +117,12 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
 .wt-wet { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 80; }
 .wt-haptic { position: fixed; left: -100px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
-.wt-stub { display: flex; justify-content: center; margin-top: 12px; transform: rotate(-1deg); filter: drop-shadow(1px 2px 1.5px rgb(60 35 10 / .35)); }
+.wt-stub { display: flex; justify-content: center; margin-top: 12px; transform: rotate(-1deg); filter: drop-shadow(1px 2px 1.5px var(--wt-stub-shadow)); }
 .wt-stub span {
-  display: block; max-width: 100%; background: #f2e4c2; padding: 6px 18px 5px; font-family: "Cormorant Garamond", var(--wt-print);
-  font-weight: 500; font-size: 17px; color: var(--wt-ink); border: 1px solid #8a6a48; outline: 3px solid #f2e4c2;
-  -webkit-mask: radial-gradient(circle 5px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 5px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
-  mask: radial-gradient(circle 5px at 0 50%, #0000 98%, #000) left / 51% 100% no-repeat, radial-gradient(circle 5px at 100% 50%, #0000 98%, #000) right / 51% 100% no-repeat;
+  display: block; max-width: 100%; background: var(--wt-stub-paper); padding: 6px 18px 5px; font-family: "Cormorant Garamond", var(--wt-print);
+  font-weight: 500; font-size: 17px; color: var(--wt-ink); border: 1px solid var(--wt-stub-line); outline: 3px solid var(--wt-stub-paper);
+  -webkit-mask: radial-gradient(circle 5px at 0 50%, var(--wt-mask-clear) 98%, var(--wt-mask-solid)) left / 51% 100% no-repeat, radial-gradient(circle 5px at 100% 50%, var(--wt-mask-clear) 98%, var(--wt-mask-solid)) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle 5px at 0 50%, var(--wt-mask-clear) 98%, var(--wt-mask-solid)) left / 51% 100% no-repeat, radial-gradient(circle 5px at 100% 50%, var(--wt-mask-clear) 98%, var(--wt-mask-solid)) right / 51% 100% no-repeat;
 }
 .wt-one { padding-top: 40px; }
 
@@ -131,7 +148,7 @@ button.wt-slip:focus-visible { outline: 2px dashed var(--wt-red); outline-offset
 }
 
 /* waiting/: the board alone, full screen, saved to the Home Screen; the paper reaches the edges on a phone */
-html.wt-page, html.wt-page body { background: #2a2119; overscroll-behavior: none; }
+html.wt-page, html.wt-page body { background: var(--wt-desk); overscroll-behavior: none; }
 html.wt-page body::before, html.wt-page body::after { display: none; }
 html.wt-page main#view { padding: 0; min-height: 100dvh; }
 html.wt-page .wt-room { padding: 0; min-height: 100dvh; display: flex; }
@@ -141,16 +158,16 @@ html.wt-page .wt-sheet::after { inset: calc(env(safe-area-inset-top) + 8px) calc
 .wt-corner {
   position: fixed; z-index: 5; top: calc(env(safe-area-inset-top) + 14px); inset-inline-end: calc(env(safe-area-inset-right) + 16px);
   display: inline-flex; align-items: center; gap: 5px; min-height: 32px; padding: 0 6px;
-  font-family: "IM Fell English SC", Georgia, serif; font-size: 13px; letter-spacing: .08em; color: #5a3d24; text-decoration: none; opacity: .75;
+  font-family: "IM Fell English SC", Georgia, serif; font-size: 13px; letter-spacing: .08em; color: var(--wt-rule); text-decoration: none; opacity: .75;
 }
 .wt-corner svg { width: 14px; height: 14px; }
 .wt-corner:hover, .wt-corner:focus-visible { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
-.wt-corner:focus-visible { outline: 2px dashed #8e1b1b; outline-offset: 2px; }
+.wt-corner:focus-visible { outline: 2px dashed var(--wt-red); outline-offset: 2px; }
 html.wt-page .wt-date { padding-inline-end: 96px; }
 @media (min-width: 900px) {
   html.wt-page .wt-room { padding: 28px; }
   html.wt-page .wt-sheet { min-height: calc(100dvh - 56px); border-radius: 3px; padding: 34px 36px 44px;
-    box-shadow: 0 1px 2px rgb(0 0 0 / .4), 0 24px 60px -18px rgb(0 0 0 / .6); }
+    box-shadow: 0 1px 2px var(--wt-desk-shadow-1), 0 24px 60px -18px var(--wt-desk-shadow-2); }
   html.wt-page .wt-sheet::after { inset: 8px; }
   .wt-corner { top: 44px; inset-inline-end: 56px; }
 }

@@ -1,3 +1,8 @@
+:root {
+  --cin-world-default: #8a5a2b; --cin-live-accent: #ffb340; --cin-live-line: rgb(255 255 255 / 0.1); --cin-live-lip: rgb(255 255 255 / 0.08);
+  --cin-play-ink: #fff; --cin-play-bg: rgb(10 10 11 / 0.55); --cin-play-bg-hover: rgb(10 10 11 / 0.75); --cin-time-bg: rgb(10 10 11 / 0.6);
+  --cin-tick-line: rgb(255 255 255 / 0.85); --cin-tick-bg: rgb(10 10 11 / 0.5); --cin-video-bg: #000;
+}
 /* Cinema: films ranked by the score of their best cuts, what the portfolio shows now, a film's backlog sheet. Tokens from app.css. */
 .cin { max-width: 1400px; }
 .cin-jobslot:empty { display: none; }
@@ -38,18 +43,18 @@
 .cin-head h2 { font-size: 18px; line-height: 1.25; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .cin-head .about { margin-top: 2px; font-size: 13px; }
 .cin-poster.world {
-  border-color: transparent; color: #fff;
-  background: linear-gradient(162deg, color-mix(in srgb, var(--c, #8a5a2b) 62%, #fff), var(--c, #8a5a2b) 46%, color-mix(in srgb, var(--c, #8a5a2b) 72%, #000));
+  border-color: transparent; color: var(--icon-fg);
+  background: linear-gradient(162deg, color-mix(in srgb, var(--c, var(--cin-world-default)) 62%, var(--mix-light)), var(--c, var(--cin-world-default)) 46%, color-mix(in srgb, var(--c, var(--cin-world-default)) 72%, var(--mix-dark)));
 }
 .broken { visibility: hidden; }
 
 /* on the portfolio now: the featured film lights its own glass */
 .cin-live {
-  --c: #ffb340;
+  --c: var(--cin-live-accent);
   position: relative; overflow: hidden; isolation: isolate; display: grid; gap: 16px; padding: 18px; border-radius: var(--r-big);
   background: linear-gradient(135deg, color-mix(in srgb, var(--c) 18%, var(--card-tint)), var(--card-tint) 70%);
-  border: 1px solid color-mix(in srgb, var(--c) 40%, rgb(255 255 255 / 0.1));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 26px 70px -34px color-mix(in srgb, var(--c) 80%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 40%, var(--cin-live-line));
+  box-shadow: inset 0 1px 0 var(--cin-live-lip), 0 26px 70px -34px color-mix(in srgb, var(--c) 80%, transparent);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
 }
 .cin-live::before {
@@ -106,7 +111,7 @@
 .cin-sheet .section:first-child { margin-top: 18px; }
 .cin-player { position: sticky; top: -4px; z-index: 4; margin-top: 10px; padding: 12px 0 8px; background: var(--float); backdrop-filter: blur(24px) saturate(1.3); -webkit-backdrop-filter: blur(24px) saturate(1.3); } /* -4px: the panel body's own padding */
 .cin-player[hidden] { display: none; }
-.cin-player video { display: block; width: 100%; max-height: 34dvh; border-radius: 14px; background: #000; object-fit: contain; }
+.cin-player video { display: block; width: 100%; max-height: 34dvh; border-radius: 14px; background: var(--cin-video-bg); object-fit: contain; }
 .cin-player-bar { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
 .cin-player-t { flex: 1; min-width: 0; color: var(--ink-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cin-player-bar .icon-btn[aria-pressed="false"] { color: var(--ink-3); } /* sound off */
@@ -132,14 +137,14 @@
 .cin-cut[data-on="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .cin-pic { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--raised); }
 .cin-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.cin-play { position: absolute; inset: 0; display: grid; place-items: center; padding: 0; border: 0; background: none; color: #fff; cursor: pointer; }
-.cin-play svg.g { width: 30px; height: 30px; padding: 8px 7px 8px 9px; border-radius: 50%; background: rgb(10 10 11 / 0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); fill: currentColor; stroke-width: 1.5; }
-.cin-play:hover svg.g { background: rgb(10 10 11 / 0.75); }
+.cin-play { position: absolute; inset: 0; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--cin-play-ink); cursor: pointer; }
+.cin-play svg.g { width: 30px; height: 30px; padding: 8px 7px 8px 9px; border-radius: 50%; background: var(--cin-play-bg); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); fill: currentColor; stroke-width: 1.5; }
+.cin-play:hover svg.g { background: var(--cin-play-bg-hover); }
 .cin-play[disabled] { cursor: default; opacity: 0.5; }
-.cin-time { position: absolute; right: 5px; bottom: 4px; padding: 1px 5px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #fff; background: rgb(10 10 11 / 0.6); pointer-events: none; }
+.cin-time { position: absolute; right: 5px; bottom: 4px; padding: 1px 5px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--cin-play-ink); background: var(--cin-time-bg); pointer-events: none; }
 .cin-tick { position: absolute; top: 0; left: 0; z-index: 2; width: 44px; height: 44px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
 .cin-tick::before {
-  content: ""; width: 22px; height: 22px; border-radius: 7px; border: 1.75px solid rgb(255 255 255 / 0.85); background: rgb(10 10 11 / 0.5);
+  content: ""; width: 22px; height: 22px; border-radius: 7px; border: 1.75px solid var(--cin-tick-line); background: var(--cin-tick-bg);
   backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: background 150ms var(--ease), border-color 150ms var(--ease);
 }
 .cin-tick svg.g { position: absolute; width: 15px; height: 15px; stroke-width: 3; color: var(--pill-ink); opacity: 0; transition: opacity 120ms var(--ease); }

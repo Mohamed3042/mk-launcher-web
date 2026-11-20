@@ -1,0 +1,278 @@
+/* MK Launcher, the Ink look: the shared ink kit (ink-kit/, untouched) applied to the launcher. Every launcher-specific
+   rule of the look lives in this file, so a kit update stays a folder swap. On only under <html data-skin="ink" data-vk>
+   (skin-boot.js); Classic (Liquid Glass, dark or Milk) is the same page without these attributes and is unchanged.
+   Rules of the look: black, white, grey; the deep red only as tiny glints; no green. Words sit on opaque plates (the
+   kit's plate colours), never on the moving liquid, at 7:1 or better (tools/check_ink_contrast.mjs reads the
+   "ink-pair:" lines below). The creature is large on Home and peers in from the top edge everywhere else; data
+   screens sit on one opaque sheet. */
+
+/* ---------- tokens: the launcher's own names, set from the kit's ---------- */
+:root[data-skin="ink"][data-vk] {
+  color-scheme: dark;
+  --vk-font: var(--font);
+  --bg: var(--vk-ink);
+  --panel: var(--vk-plate-2);
+  --raised: var(--vk-plate-3);
+  --hover: rgb(255 255 255 / 0.07);
+  --float: var(--vk-plate);
+  --solid: var(--vk-plate);
+  --line: rgb(255 255 255 / 0.09);
+  --line-strong: var(--vk-line-2);
+  --ink: var(--vk-text);
+  --ink-2: var(--vk-muted);
+  --ink-3: var(--vk-faint);
+  --accent: var(--vk-accent);
+  --accent-ink: var(--vk-accent-ink);
+  --accent-soft: rgb(255 255 255 / 0.1);
+  --pill: var(--vk-white-2);
+  --pill-ink: var(--vk-accent-ink);
+  --pill-glow: rgb(255 255 255 / 0.16);
+  --card-tint: transparent;
+  --glow: var(--vk-ink);
+  --glow-mix: 0%;
+  --up: var(--vk-text);            /* status is the shape and the word: a filled dot, a ring, an open square */
+  --starting: var(--vk-muted);
+  --down: var(--vk-bad);
+  --ring: var(--vk-accent);
+  --shadow: 0 24px 60px rgb(0 0 0 / 0.85), 0 2px 8px -2px rgb(0 0 0 / 0.6);
+  /* charts: eight greys, neighbours far apart, all readable on a plate */
+  --s1: #f2f1ec; --s2: #8f8f8a; --s3: #5f5f5b; --s4: #cfcec8; --s5: #a9a8a2; --s6: #e6e5df; --s7: #77776f; --s8: #b9b9b4;
+  --heat-0: rgb(255 255 255 / 0.06); --heat-1: #2c2c2b; --heat-2: #575755; --heat-3: #92928e; --heat-4: #e6e5df;
+  --add: var(--vk-ok); --del: var(--vk-bad);
+  --blur: none;
+  --r-panel: var(--vk-r-tile);
+  --r-big: var(--vk-membrane);
+  --hero-filter: none;
+  --hero-veil: none; --hero-veil-desk: none;
+  --hero-glass: var(--vk-plate); --hero-line: var(--vk-rim-soft); --hero-text-glow: none;
+  --main-glass: var(--vk-plate); --main-line: var(--vk-rim-soft); --main-lip: rgb(255 255 255 / 0.1);
+  --main-tint: 0%; --main-edge: 0%; --main-glow: 0%; --main-shadow: 0 24px 60px rgb(0 0 0 / 0.85);
+  --main-icon: var(--vk-plate-3);
+  --badge: var(--vk-white-2); --badge-ink: var(--vk-accent-ink);
+  /* ink-pair: --ink on --bg */
+  /* ink-pair: --ink on --panel */
+  /* ink-pair: --ink on --raised */
+  /* ink-pair: --ink-2 on --panel */
+  /* ink-pair: --ink-2 on --raised */
+  /* ink-pair: --ink-3 on --panel */
+  /* ink-pair: --ink-3 on --raised */
+  /* ink-pair: --ink-3 on --float */
+  /* ink-pair: --accent on --panel */
+  /* ink-pair: --pill-ink on --pill */
+  /* ink-pair: --badge-ink on --badge */
+  /* ink-pair: --down on --panel */
+  /* ink-pair: --down on --raised */
+  /* ink-pair: --up on --panel */
+  /* ink-pair: --starting on --panel */
+  /* ink-pair: --s4 on --panel */
+  /* ink-pair: --s8 on --panel */
+
+  /* the launcher's own colours that were not tokens of the shell before (docs/ink/tokens-A.md) */
+  --mix-light: #f2f1ec; --mix-dark: #000;
+  --icon-default: var(--vk-plate-3); --icon-base: var(--vk-plate-3); --main-app-c: var(--vk-plate-3); --icon-fg: var(--vk-text);
+  --icon-shine: rgb(255 255 255 / 0.2); --icon-shade: rgb(0 0 0 / 0.4);
+  --glow-warm-tint: #000; --room-sheen: transparent; --panel-lip: rgb(255 255 255 / 0.1);
+  --scrim: rgb(0 0 0 / 0.72); --float-phone-dark: var(--vk-plate);
+  --cmp-knob-ink: #000; --cmp-tag-bg: rgb(0 0 0 / 0.82);
+  --ask-art-bg: var(--vk-plate-3);
+  --host-bg: var(--vk-ink); --host-solid: var(--vk-plate); --host-ink: var(--vk-text); --host-ink-3: var(--vk-faint);
+  --host-pill-line: var(--vk-rim-soft); --host-pill-bg: rgb(6 6 6 / 0.9); --host-pill-lip: rgb(255 255 255 / 0.12);
+  --host-menu-line: var(--vk-rim-soft); --host-menu-bg: rgb(6 6 6 / 0.96); --host-menu-hover: rgb(255 255 255 / 0.08);
+  --host-menu-icon: var(--vk-muted); --host-drop: var(--vk-bad);
+  --glyph-book: var(--vk-plate-3); --glyph-film: var(--vk-plate-3); --glyph-globe: var(--vk-plate-3); --glyph-sparkles: var(--vk-plate-3);
+  --glyph-mic: var(--vk-plate-3); --glyph-folder: var(--vk-plate-3); --glyph-code: var(--vk-plate-3);
+  --repo-private: var(--vk-plate-3); --repo-public: var(--vk-plate-3);
+  /* Cinema */
+  --cin-world-default: var(--vk-plate-3); --cin-live-accent: var(--vk-text); --cin-live-line: var(--vk-rim-soft);
+  --cin-play-bg: rgb(0 0 0 / 0.7); --cin-play-bg-hover: rgb(0 0 0 / 0.86); --cin-time-bg: rgb(0 0 0 / 0.72); --cin-tick-bg: rgb(0 0 0 / 0.6);
+  /* Plans: one light grey for every plan; the map's eight areas are greys told apart by their numbers and places */
+  --pln-on-mark: #000; --pln-plan-default: #e6e5df; --pln-plan-ink-shade: #000; --pln-on-plan: #000;
+  --pln-halo-core: #fff; --pln-halo-mix: #fff;
+  /* eight steps from #9b9b96 up, so the black area number stays 7:1 on the darkest */
+  --pln-area-1: #f2f1ec; --pln-area-2: #b3b3ad; --pln-area-3: #d8d8d2; --pln-area-4: #a7a7a2;
+  --pln-area-5: #cbcbc5; --pln-area-6: #9b9b96; --pln-area-7: #e5e4de; --pln-area-8: #bfbfb9;
+  --pln-map-room: var(--vk-ink); --pln-map-glow: var(--vk-ink); --pln-area-num-ink-base: #000; --pln-area-num-ink: #000;
+  /* Reels: a full-screen picture; the warm amber becomes white and grey */
+  --rl-media-bg: #000; --rl-media-warm-1: #262626; --rl-media-warm-2: #111; --rl-media-warm-3: #060606;
+  --rl-tint-glow: rgb(255 255 255 / 0.08); --rl-tint-1: #1b1b1b; --rl-tint-2: #0b0b0b; --rl-tint-3: #050505;
+  --rl-shimmer-1: #0b0b0b; --rl-shimmer-2: #1b1b1b;
+  --rl-accent: #fff; --rl-accent-soft: rgb(255 255 255 / 0.14); --rl-accent-text: var(--vk-text);
+  --rl-ok: var(--vk-text); --rl-ok-glow: transparent; --rl-down: var(--vk-bad);
+  --rl-shade-97: rgb(0 0 0 / 0.97); --rl-shade-92: rgb(0 0 0 / 0.92); --rl-shade-90: rgb(0 0 0 / 0.9); --rl-shade-70: rgb(0 0 0 / 0.7);
+  --rl-shade-55: rgb(0 0 0 / 0.55); --rl-shade-0: rgb(0 0 0 / 0);
+  --rl-sound-bg: rgb(6 6 6 / 0.72); --rl-rb-bg: rgb(6 6 6 / 0.66); --rl-rb-hover: rgb(27 27 27 / 0.8); --rl-opaque-btn: var(--vk-plate-3); --rl-opaque-card: rgb(11 11 11 / 0.94);
+  /* Waiting: the same pinned board, cut from black card: white hand, steel pins, a deep red wax glint */
+  --wt-ink: var(--vk-text); --wt-red: var(--vk-text); --wt-page: var(--vk-plate); --wt-slip: #161616; --wt-rule: var(--vk-muted);
+  --wt-paper-quiet: #101010; --wt-paper-done: #121212; --wt-paper-void: #0d0d0d; --wt-hand-quiet: var(--vk-faint); --wt-hand-void: var(--vk-faint);
+  --wt-stub-paper: var(--vk-plate-3); --wt-stub-line: var(--vk-line-2); --wt-desk: var(--vk-ink);
+  --wt-sheet-shadow-1: rgb(0 0 0 / 0.6); --wt-sheet-shadow-2: rgb(0 0 0 / 0.8); --wt-slip-shadow: rgb(0 0 0 / 0.85);
+  --wt-slip-shadow-done: rgb(0 0 0 / 0.7); --wt-slip-shadow-void: rgb(0 0 0 / 0.6); --wt-stub-shadow: rgb(0 0 0 / 0.8);
+  --wt-brass-1: #ffffff; --wt-brass-2: #9a9a95; --wt-brass-3: #262626; --wt-brass-rim: #000; --wt-brass-glint: #fff;
+  --wt-wax-1: #a3172a; --wt-wax-2: var(--vk-red); --wt-wax-3: #33030a; --wt-wax-rim: #160104; --wt-wax-ring: #42060e; --wt-wax-mark: var(--vk-bad);
+  /* ink-pair: --wt-ink on --wt-slip */
+  /* ink-pair: --wt-ink on --wt-page */
+  /* ink-pair: --wt-hand-quiet on --wt-paper-quiet */
+  /* ink-pair: --wt-hand-void on --wt-paper-void */
+  /* ink-pair: --wt-red on --wt-slip */
+  /* ink-pair: --wt-red on --wt-page */
+  /* ink-pair: --wt-rule on --wt-page */
+  /* ink-pair: --pln-on-plan on --pln-plan-default */
+  /* ink-pair: --pln-area-num-ink on --pln-area-1 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-2 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-3 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-4 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-5 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-6 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-7 */
+  /* ink-pair: --pln-area-num-ink on --pln-area-8 */
+  /* ink-pair: --pln-area-num-ink-base on --pln-area-6 */
+  /* ink-pair: --rl-accent-text on --rl-opaque-card */
+}
+/* a plan's own colour arrives inline from its data: in Ink every plan wears the same light grey */
+:root[data-skin="ink"] :is(.pln, .pln-panel, .pln-rail, .pln-libpage, .pln-lib, .pln-rc, .pln-mv, [style*="--plan"]) {
+  --plan: var(--pln-plan-default) !important; --plan-ink: var(--pln-plan-default) !important;
+}
+:root[data-skin="ink"] .cin-poster.world { background: var(--vk-btn-bg); box-shadow: var(--vk-btn-edge); }
+:root[data-skin="ink"] .cin-poster.world svg { color: var(--vk-text); }
+/* the featured film's own colour arrives inline (--c); in Ink its card is a black plate like every other card */
+:root[data-skin="ink"] .cin-live {
+  --c: var(--cin-live-accent) !important;
+  background: var(--vk-glass), var(--vk-plate-3); border-color: var(--vk-rim-soft); box-shadow: var(--vk-glass-edge);
+}
+:root[data-skin="ink"] .cin-live::before { display: none; }
+/* a repo's language colour arrives inline from GitHub; the language is written beside it, so the dot goes grey */
+:root[data-skin="ink"] .st > i[style] { background: var(--vk-faint) !important; }
+/* Reels on a computer: the glow behind the reel is the reel's own picture, blurred; in Ink it is a grey haze */
+:root[data-skin="ink"] .reels-glow i { filter: blur(80px) grayscale(1) brightness(0.55) !important; }
+
+/* ---------- the room: the kit's liquid replaces the warm glow and the grain ---------- */
+:root[data-skin="ink"] body { background: var(--vk-ink); }
+:root[data-skin="ink"] body::before, :root[data-skin="ink"] body::after { display: none; }
+:root[data-skin="ink"] .app { position: relative; z-index: 1; }
+:root[data-skin="ink"] ::selection { background: rgb(255 255 255 / 0.28); }
+:root[data-skin="ink"] :focus-visible { outline-color: #fff; }
+/* the kit's moving grain moves only while the liquid runs at full speed; at 12 fps and still it holds its frame
+   (a running grain kept the compositor busy: about 7 % of a core on Home at 12 fps, measured 20 Nov) */
+:root[data-skin="ink"]:not([data-ink-mode="full"]) .vk-film { animation-play-state: paused; }
+:root[data-skin="ink"][data-ink-mode="off"] .vk-film { display: none; }
+:root[data-skin="ink"] .vk-layer { transition: opacity var(--vk-t-slow) var(--vk-heavy); }
+
+/* ---------- shared pieces ---------- */
+:root[data-skin="ink"] :is(.topbar, .tabbar, .search, .panel, .tooltip, .changes-panel, .main-app, .menu, .icon-btn.round, .toast) {
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+:root[data-skin="ink"] .aicon:not(.self) {
+  background: var(--vk-btn-bg); color: var(--vk-text);
+  box-shadow: var(--vk-btn-edge), inset 0 0 0 1px rgb(255 255 255 / 0.12);
+}
+:root[data-skin="ink"] .aicon:not(.self) svg.g { filter: drop-shadow(0 0 3px rgb(255 255 255 / 0.35)); }
+/* the launcher's own logo (its repo's rows in What changed) is a coloured picture: in Ink it is grey like every icon */
+:root[data-skin="ink"] .aicon.self img { filter: grayscale(1) contrast(1.15); }
+:root[data-skin="ink"] .badge { border-color: var(--vk-ink); }
+:root[data-skin="ink"] .st.up i { box-shadow: none; }
+:root[data-skin="ink"] .btn.primary, :root[data-skin="ink"] .tab[aria-current="page"],
+:root[data-skin="ink"] .rail a.nav[aria-current="page"] {
+  background: var(--vk-primary-bg); color: var(--vk-accent-ink); box-shadow: var(--vk-primary-edge); border-color: #fff;
+}
+:root[data-skin="ink"] .btn:not(.primary) { background: var(--vk-btn-bg); box-shadow: var(--vk-btn-edge); border-color: var(--vk-rim-soft); }
+:root[data-skin="ink"] .btn:not(.primary):hover { background: var(--vk-btn-bg-hot); border-color: var(--vk-rim); }
+:root[data-skin="ink"] .seg { background: var(--vk-glass), var(--vk-plate); box-shadow: var(--vk-glass-edge); }
+:root[data-skin="ink"] .seg button[aria-pressed="true"], :root[data-skin="ink"] .chip[aria-pressed="true"] {
+  background: var(--vk-seg-on-bg); color: var(--vk-accent-ink);
+}
+:root[data-skin="ink"] .chip[aria-pressed="true"] .count { color: var(--vk-accent-ink); }
+:root[data-skin="ink"] .search { background: var(--vk-glass), var(--vk-plate); border-color: var(--vk-rim-soft); box-shadow: var(--vk-glass-edge); }
+:root[data-skin="ink"] .search:focus-within { border-color: #fff; }
+:root[data-skin="ink"] .panel, :root[data-skin="ink"] .menu, :root[data-skin="ink"] .toast {
+  background: var(--vk-glass), var(--vk-plate); border-color: var(--vk-rim-soft); box-shadow: var(--vk-glass-edge);
+}
+:root[data-skin="ink"] .link-btn, :root[data-skin="ink"] .see-all svg.g, :root[data-skin="ink"] .focus-more { color: var(--vk-text); text-decoration: underline; text-decoration-color: var(--vk-rim); text-underline-offset: 3px; }
+:root[data-skin="ink"] .see-all, :root[data-skin="ink"] .focus-more { text-decoration: none; }
+
+/* ---------- the shell: rail, top bar, tab bar ---------- */
+:root[data-skin="ink"] .tabbar { background: var(--vk-glass), var(--vk-plate); border-color: var(--vk-rim-soft); box-shadow: var(--vk-glass-edge); border-radius: 30px; }
+:root[data-skin="ink"] .topbar { background: none; }
+:root[data-skin="ink"] .topbar.scrolled { background: var(--vk-ink); border-bottom-color: var(--vk-line-2); }
+/* the page's name sits on a plate while the liquid shows round it */
+:root[data-skin="ink"] .topbar .phone-only:has(.title) {
+  padding: 8px 14px 9px; border-radius: var(--vk-r-tile); background: var(--vk-glass), var(--vk-plate); box-shadow: var(--vk-glass-edge);
+}
+:root[data-skin="ink"] .topbar .icon-btn { background: var(--vk-btn-bg); box-shadow: var(--vk-btn-edge); border-color: var(--vk-rim-soft); color: var(--vk-text); }
+/* the theme button belongs to Classic; Ink is always dark */
+:root[data-skin="ink"] [data-act="theme"] { display: none; }
+@media (min-width: 760px) {
+  :root[data-skin="ink"] .rail {
+    margin: 14px 0 14px 14px; height: calc(100dvh - 28px); top: 14px; border: 0;
+    background: var(--vk-glass), var(--vk-plate); border-radius: var(--vk-membrane); box-shadow: var(--vk-glass-edge);
+  }
+  :root[data-skin="ink"] .rail .foot .row-btns { border-top-color: var(--vk-line-2); }
+  :root[data-skin="ink"] .topbar.scrolled { background: none; border: 0; }
+  :root[data-skin="ink"] .desk-search .search { background: var(--vk-glass), var(--vk-plate); }
+}
+
+/* ---------- data screens: one opaque sheet, the liquid only round its edges ----------
+   (not the Waiting board's page of its own, waiting/: there the board is the whole page, on the black desk) */
+:root[data-skin="ink"]:not([data-ink-route="home"]):not([data-ink-route="reels"]):not([data-ink-route="connect"]):not(.wt-page) main#view {
+  position: relative; margin-block: 4px 0; padding-top: 22px;
+  background: var(--vk-glass), var(--vk-plate); border-radius: var(--vk-membrane); box-shadow: var(--vk-glass-edge);
+}
+@media (min-width: 760px) {
+  :root[data-skin="ink"]:not([data-ink-route="home"]):not([data-ink-route="reels"]):not([data-ink-route="connect"]):not(.wt-page) main#view {
+    width: auto; margin: 6px 22px 22px 22px; padding: 26px 34px 56px;
+  }
+}
+@media (max-width: 759px) {
+  :root[data-skin="ink"]:not([data-ink-route="home"]):not([data-ink-route="reels"]):not([data-ink-route="connect"]):not(.wt-page) main#view {
+    margin-inline: 6px; padding-top: 16px; padding-inline: 12px; border-radius: 26px 32px 22px 30px / 30px 24px 32px 26px;
+  }
+  /* the page's name is in the top plate on a phone, so the sheet starts with its first row, not a gap */
+  :root[data-skin="ink"]:not([data-ink-route="home"]):not([data-ink-route="reels"]):not([data-ink-route="connect"]):not(.wt-page) main#view > .page-title + * { margin-top: 0; }
+}
+/* names never clip: a word longer than its tile breaks inside the two lines it is given */
+:root[data-skin="ink"] :is(.tile .name, .pln-block.sm .pln-block-t b) { overflow-wrap: anywhere; }
+/* Plans map: the sheet is a little narrower than Classic's page, so a part's small block gives its words the room */
+:root[data-skin="ink"] .pln-block.sm { grid-template-columns: 26px minmax(0, 1fr); gap: 7px; padding-block: 9px; padding-inline: 8px 22px; }
+:root[data-skin="ink"] .pln-block.sm .pln-block-icon { width: 26px; height: 26px; border-radius: 8px; }
+:root[data-skin="ink"] .pln-block.sm .pln-bmark { inset-inline-end: 6px; bottom: 8px; }
+:root[data-skin="ink"] .changes-panel, :root[data-skin="ink"] .home-card {
+  background: var(--vk-glass), var(--vk-plate); border: 0; box-shadow: var(--vk-glass-edge); border-radius: var(--vk-r-tile);
+}
+
+/* Waiting: a done or crossed-out slip says so with its ink line, its dimmed wax and its paper; its words stay 7:1
+   (the contrast check reads no opacity, so by hand: done stamp .68 of #f2f1ec on #121212 = 8.0:1, done writing .74
+   = 9.3:1; crossed-out writing #a9a8a2 on #0d0d0d = 8.2:1, its stamp .7 = 8.6:1) */
+:root[data-skin="ink"] .wt-slip.done .wt-day { opacity: .68; }
+:root[data-skin="ink"] .wt-slip.cancelled { opacity: 1; }
+:root[data-skin="ink"] .wt-slip.cancelled .wt-hand { opacity: 1; }
+:root[data-skin="ink"] .wt-slip.cancelled .wt-day { opacity: .7; }
+
+/* the Waiting board's own page: the board fills the window on a computer too, so the corner link stays on the card */
+:root[data-skin="ink"].wt-page main#view { max-width: none; }
+
+/* ---------- Home: cards floating on the liquid, the creature in the header box ---------- */
+:root[data-skin="ink"] .home-photo { display: none; }
+:root[data-skin="ink"] .home .section, :root[data-skin="ink"] .home-waiting {
+  background: var(--vk-glass), var(--vk-plate); box-shadow: var(--vk-glass-edge); border-radius: var(--vk-r-tile);
+}
+:root[data-skin="ink"] .home .section { padding: 16px 18px 14px; }
+:root[data-skin="ink"] .home-head {
+  align-self: flex-start; padding: 16px 22px 14px; border-radius: var(--vk-r-tile);
+  background: var(--vk-glass), var(--vk-plate); box-shadow: var(--vk-glass-edge);
+}
+:root[data-skin="ink"] .main-app { background: var(--vk-glass), var(--vk-plate); border: 0; box-shadow: var(--vk-glass-edge); border-radius: var(--vk-membrane); }
+:root[data-skin="ink"] .main-app .aicon.lg { background: var(--vk-disc-bg); box-shadow: var(--vk-disc-edge); }
+:root[data-skin="ink"] .focus-tick[aria-pressed="true"] svg path { stroke: var(--vk-ink); }
+:root[data-skin="ink"] .act-mark.plan i { background: var(--vk-muted); box-shadow: 0 0 0 3px rgb(255 255 255 / 0.12); }
+@media (min-width: 760px) {
+  :root[data-skin="ink"] .home-hero {
+    min-height: clamp(360px, 40vh, 520px); border: 0; background: none;
+    box-shadow: inset 0 0 0 1px var(--vk-rim-soft), inset 0 0 80px rgb(0 0 0 / 0.9);
+    border-radius: var(--vk-membrane);
+  }
+  :root[data-skin="ink"] .main-app { max-width: 560px; }
+}
+@media (max-width: 759px) {
+  :root[data-skin="ink"] .home-hero { padding-top: 230px; }
+  :root[data-skin="ink"] html.route-home .topbar:not(.scrolled) .icon-btn,
+  :root[data-skin="ink"].route-home .topbar .icon-btn { background: var(--vk-btn-bg); border-color: var(--vk-rim-soft); }
+}

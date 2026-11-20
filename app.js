@@ -12,6 +12,7 @@ import { createHost } from "./host.js";
 import * as HR from "./host-rules.js";
 import * as HM from "./home-rules.js";
 import * as CR from "./changes-rules.js";
+import * as ink from "./skin-ink.js";
 
 const BACKUP = source.BACKUP; // the GitHub Pages copy: reads the PC's last snapshot, greys out what needs the PC
 
@@ -145,7 +146,7 @@ function counts() {
 function appIcon(app, size = "") {
   const st = stateOf(app);
   const badge = st === "none" || st === "unknown" ? "" : `<span class="badge ${st}"></span>`;
-  return `<span class="aicon ${size}" style="--c:${esc(app.color || "#495057")}">${g(app.icon || "grid")}${badge}</span>`;
+  return `<span class="aicon ${size}" style="--c:${app.color ? esc(app.color) : "var(--icon-default)"}">${g(app.icon || "grid")}${badge}</span>`;
 }
 function letterIcon(name, size = "") {
   const letter = (name.match(/[A-Za-z0-9؀-ۿ]/) || ["•"])[0].toUpperCase();
@@ -192,6 +193,7 @@ function section(title, meta, body, extra = "") {
 const reels = createReels({ $, $$, esc, g, api, post, toast, copy, openPanel, closePanel });
 const settings = createSettings({ $, esc, g, api, post, toast, ago, theme: () => localGet("theme", "auto"),
   setTheme: (v) => { localSet("theme", v); applyTheme(); },
+  look: ink.skin, setLook: (v) => { ink.setSkin(v); },
   inside: { phone: isPhone, get: () => HR.readPref(globalThis.localStorage), set: (on) => HR.writePref(globalThis.localStorage, on) } }, reels);
 const host = createHost({ esc, g, toast });
 const cinema = createCinema({ $, $$, esc, g, api, post, toast, ago, openPanel, greyBtn, offlineBar, localGet, localSet, backup: BACKUP, owner: source.OWNER,
@@ -336,7 +338,7 @@ function homeHero(main) {
 }
 function mainCard(app) {
   const opened = S.recents.find((r) => r.id === app.id);
-  const color = esc(app.color || "#8a5a2b");
+  const color = app.color ? esc(app.color) : "var(--main-app-c)";
   const st = stateOf(app);
   const badge = st === "none" || st === "unknown" ? "" : `<span class="badge ${st}"></span>`;
   return `<div class="main-app" style="--c:${color}">
@@ -449,7 +451,7 @@ function updateLines(sinceMs) {
     .flatMap((r) => (r.recent || []).map((c) => ({ ...c, repo: r.name, at: Date.parse(c.date) })))
     .filter((c) => c.at >= sinceMs).sort((a, b) => b.at - a.at);
 }
-const GLYPH_COLORS = { book: "#7d55c7", film: "#c0392b", globe: "#23866a", sparkles: "#b14f96", mic: "#12a07a", folder: "#c98a2c", code: "#5b6776" };
+const GLYPH_COLORS = { book: "var(--glyph-book)", film: "var(--glyph-film)", globe: "var(--glyph-globe)", sparkles: "var(--glyph-sparkles)", mic: "var(--glyph-mic)", folder: "var(--glyph-folder)", code: "var(--glyph-code)" };
 const REPO_GLYPHS = [[/portfolio|book|library/i, "book"], [/cinema|film|video|motion/i, "film"], [/site|pages|web/i, "globe"],
   [/skill|prompt/i, "sparkles"], [/voice|audio|tones/i, "mic"], [/projects?$/i, "folder"]];
 function repoIcon(repoName, size = "sm") {
@@ -628,7 +630,7 @@ function repoRow(r) {
   const lang = r.language ? `<span class="st"><i style="background:${esc(r.lang_color || "var(--ink-3)")}"></i>${esc(r.language)}</span>` : "";
   const live = r.pages ? `<a class="btn sm" href="${esc(r.pages)}" target="_blank" rel="noopener">${g("globe")}Live site</a>` : "";
   return `<div class="row" data-act="repo" data-repo="${esc(r.name)}" role="button" tabindex="0">
-    <span class="aicon sm" style="--c:${r.private ? "#4b5563" : "#1f6feb"}">${g(r.private ? "lock" : "github")}</span>
+    <span class="aicon sm" style="--c:${r.private ? "var(--repo-private)" : "var(--repo-public)"}">${g(r.private ? "lock" : "github")}</span>
     <div class="main"><div class="name">${esc(r.name)}${r.archived ? ` <span class="pill">archived</span>` : ""}</div>
     <div class="sub">${esc(r.description || (r.private ? "Private repo" : "Public repo"))}</div></div>
     <div class="end"><span class="desk-only">${lang}</span>${r.commits_30d ? `<span class="pill num desk-only" title="Commits in the last 30 days">${r.commits_30d}</span>` : ""}<span class="col desk-only">${esc(ago(r.pushed))}</span>${live}</div></div>`;
@@ -829,7 +831,7 @@ function repoPanel(name) {
     <div class="chart-card" style="margin-top:14px"><h3>Lines added and removed</h3><p class="sub">Per week, last 26 weeks</p><div id="ch-lines"><div class="skeleton" style="height:150px"></div></div></div>
     ${section("Details", "", `<dl class="kv"><dt>Visibility</dt><dd>${r.private ? "Private" : "Public"}</dd>${r.language ? `<dt>Language</dt><dd>${esc(r.language)}</dd>` : ""}<dt>Stars</dt><dd>${r.stars ?? 0}</dd></dl>`)}`;
   S.after.push(() => loadLines(r.name));
-  openPanel(`<div class="panel-head"><span class="aicon lg" style="--c:${r.private ? "#4b5563" : "#1f6feb"}">${g(r.private ? "lock" : "github")}</span><div class="main"><h2>${esc(r.name)}</h2><div class="about">${esc(r.description || "")}</div></div>${closeBtn()}</div><div class="panel-body">${body}</div>`);
+  openPanel(`<div class="panel-head"><span class="aicon lg" style="--c:${r.private ? "var(--repo-private)" : "var(--repo-public)"}">${g(r.private ? "lock" : "github")}</span><div class="main"><h2>${esc(r.name)}</h2><div class="about">${esc(r.description || "")}</div></div>${closeBtn()}</div><div class="panel-body">${body}</div>`);
 }
 
 async function comparePanel(appId, beforeId, afterId) {
@@ -1146,6 +1148,7 @@ function render() {
   C.hideTip(); // the charts it pointed at are about to be replaced
   view.innerHTML = S.q ? searchView() : head + views[S.route]();
   runAfter();
+  ink.after(S.q ? "search" : S.route); // the Ink look: the liquid's cost, the creature's place, the words it keeps clear
 }
 function runAfter() {
   const jobs = S.after;
@@ -1201,7 +1204,7 @@ function schedulePoll(ms) {
       if (before !== after) {
         renderShell();
         // Reels and Settings show no app status: never redraw them under his thumb
-        if (!S.q && !["reels", "settings", "cinema", "plans", "waiting"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); }
+        if (!S.q && !["reels", "settings", "cinema", "plans", "waiting"].includes(S.route)) { S.after = []; $("#view").innerHTML = views[S.route](); runAfter(); ink.after(S.route); }
         if (S.panelApp) refreshPanelStatus();
       }
     }

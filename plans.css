@@ -1,13 +1,36 @@
 /* Plans: living business plans (DESIGN.md, "Plans"). The plan's own colour (--plan) lights its hero card, its
    launch line, its next action and its layer glyphs: the Borrowed Light Rule. Every status is a shape and a word.
    Phone layout comes from the page's own width (container queries), so a narrow window reads like a phone. */
-:root { --on-mark: #0b0b0c; }
-@media (prefers-color-scheme: light) { :root:where(:not([data-theme="dark"])) { --on-mark: #ffffff; } }
-:root[data-theme="light"] { --on-mark: #ffffff; }
+/* Colour tokens (--pln-*): every colour this page paints. Dark values here; the light ("Milk") values follow below.
+   A theme restyles Plans by overriding these only. */
+:root {
+  --pln-on-mark: #0b0b0c;
+  --pln-plan-default: #e9a54b; --pln-plan-ink-shade: #2a1804; --pln-on-plan: #1b1306;
+  --pln-halo-core: #fff7ea; --pln-halo-mix: #fff;
+  --pln-sheen-6: rgb(255 255 255 / 0.06); --pln-sheen-5: rgb(255 255 255 / 0.05);
+  --pln-hover-wash: rgb(255 255 255 / 0.035); --pln-chip-wash: rgb(255 255 255 / 0.025);
+  --pln-stack-seam: rgb(0 0 0 / 0.28); --pln-mask-solid: #000; --pln-del-shade: #000;
+  --pln-confirm-shadow: rgb(0 0 0 / 0.7); --pln-scrim: rgb(0 0 0 / 0.55);
+  --pln-area-1: #22c55e; --pln-area-2: #3b82f6; --pln-area-3: #f59e0b; --pln-area-4: #a855f7;
+  --pln-area-5: #ef4444; --pln-area-6: #14b8a6; --pln-area-7: #38bdf8; --pln-area-8: #f472b6;
+  --pln-map-room: #0b0c0e; --pln-map-glow: #1b1f27;
+  --pln-area-num-ink-base: #141006; --pln-area-num-ink: #0b0c0e;
+  --on-mark: var(--pln-on-mark);
+}
+@media (prefers-color-scheme: light) { :root:where(:not([data-theme="dark"])) {
+  --pln-on-mark: #ffffff;
+  --pln-area-1: #16a34a; --pln-area-2: #2563eb; --pln-area-3: #d97706; --pln-area-4: #9333ea;
+  --pln-area-5: #dc2626; --pln-area-6: #0d9488; --pln-area-7: #0284c7; --pln-area-8: #db2777; --pln-map-room: #f3eee6;
+} }
+:root[data-theme="light"] {
+  --pln-on-mark: #ffffff;
+  --pln-area-1: #16a34a; --pln-area-2: #2563eb; --pln-area-3: #d97706; --pln-area-4: #9333ea;
+  --pln-area-5: #dc2626; --pln-area-6: #0d9488; --pln-area-7: #0284c7; --pln-area-8: #db2777; --pln-map-room: #f3eee6;
+}
 
-.pln, .pln-panel, .pln-rail, .pln-libpage { --plan: #e9a54b; --plan-ink: var(--plan); }
-@media (prefers-color-scheme: light) { :root:where(:not([data-theme="dark"])) :is(.pln, .pln-panel, .pln-rail, .pln-libpage, .pln-lib, .pln-rc) { --plan-ink: color-mix(in oklab, var(--plan) 58%, #2a1804); } }
-:root[data-theme="light"] :is(.pln, .pln-panel, .pln-rail, .pln-libpage, .pln-lib, .pln-rc) { --plan-ink: color-mix(in oklab, var(--plan) 58%, #2a1804); }
+.pln, .pln-panel, .pln-rail, .pln-libpage { --plan: var(--pln-plan-default); --plan-ink: var(--plan); }
+@media (prefers-color-scheme: light) { :root:where(:not([data-theme="dark"])) :is(.pln, .pln-panel, .pln-rail, .pln-libpage, .pln-lib, .pln-rc) { --plan-ink: color-mix(in oklab, var(--plan) 58%, var(--pln-plan-ink-shade)); } }
+:root[data-theme="light"] :is(.pln, .pln-panel, .pln-rail, .pln-libpage, .pln-lib, .pln-rc) { --plan-ink: color-mix(in oklab, var(--plan) 58%, var(--pln-plan-ink-shade)); }
 .pln { container-type: inline-size; container-name: pln; }
 .pln .grow, .pln-bar .grow { flex: 1; }
 
@@ -82,7 +105,7 @@
   position: relative; isolation: isolate; overflow: hidden; padding: 24px 26px 16px; border-radius: var(--r-big);
   background: linear-gradient(140deg, color-mix(in srgb, var(--plan) 9%, var(--card-tint)), var(--card-tint) 58%);
   border: 1px solid color-mix(in srgb, var(--plan) 24%, var(--line));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 30px 80px -44px color-mix(in srgb, var(--plan) 65%, transparent);
+  box-shadow: inset 0 1px 0 var(--pln-sheen-6), 0 30px 80px -44px color-mix(in srgb, var(--plan) 65%, transparent);
   backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
 }
 .pln-card::before { /* the line's light pools under it */
@@ -148,7 +171,7 @@
   border-radius: 18px; text-align: start; color: inherit; font: inherit; cursor: pointer;
   border: 1px solid color-mix(in srgb, var(--plan) 52%, var(--line));
   background: linear-gradient(150deg, color-mix(in srgb, var(--plan) 16%, transparent), color-mix(in srgb, var(--plan) 4%, transparent) 70%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 16px 40px -26px color-mix(in srgb, var(--plan) 80%, transparent);
+  box-shadow: inset 0 1px 0 var(--pln-sheen-5), 0 16px 40px -26px color-mix(in srgb, var(--plan) 80%, transparent);
   transition: border-color 150ms var(--ease), transform 120ms var(--ease);
 }
 div.pln-nextcard { grid-template-columns: 44px minmax(0, 1fr); cursor: default; }
@@ -187,7 +210,7 @@ button.pln-nextcard:active { transform: scale(0.985); }
   border: 0; background: none; color: inherit; font: inherit; text-align: center; cursor: pointer; border-radius: 16px;
   transition: background 150ms var(--ease);
 }
-.pln-stop-btn:hover { background: rgb(255 255 255 / 0.035); }
+.pln-stop-btn:hover { background: var(--pln-hover-wash); }
 .pln-stop-btn:hover .pln-node { transform: scale(1.06); }
 .pln-node {
   position: relative; z-index: 1; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; flex: none;
@@ -204,8 +227,8 @@ button.pln-nextcard:active { transform: scale(0.985); }
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--starting) 14%, transparent), 0 0 18px -3px color-mix(in srgb, var(--starting) 60%, transparent);
 }
 :is(.pln-stop, .pln-ph-stop)[data-state="now"] .pln-node {
-  width: 40px; height: 40px; margin: -3px 0; border: 0; color: #1b1306;
-  background: radial-gradient(circle at 50% 38%, #fff7ea, color-mix(in srgb, var(--plan) 62%, #fff) 58%, var(--plan));
+  width: 40px; height: 40px; margin: -3px 0; border: 0; color: var(--pln-on-plan);
+  background: radial-gradient(circle at 50% 38%, var(--pln-halo-core), color-mix(in srgb, var(--plan) 62%, var(--pln-halo-mix)) 58%, var(--plan));
   box-shadow: 0 0 0 5px color-mix(in srgb, var(--plan) 26%, transparent), 0 0 30px 2px color-mix(in srgb, var(--plan) 70%, transparent);
 }
 .pln-stop[data-changed] .pln-node::after, .pln-chip[data-changed]::after { /* what moved since his last look: an amber ring and a word for screen readers */
@@ -225,7 +248,7 @@ button.pln-nextcard:active { transform: scale(0.985); }
   font-size: 12.5px; font-weight: 600; color: var(--ink-2); background: var(--raised); border: 1px solid var(--line);
 }
 .pln-who[data-state="you"] { color: var(--starting); border-color: color-mix(in srgb, var(--starting) 50%, transparent); background: color-mix(in srgb, var(--starting) 9%, transparent); }
-.pln-who[data-state="now"] { color: #1b1306; background: var(--plan); border-color: transparent; box-shadow: 0 6px 18px -8px var(--plan); }
+.pln-who[data-state="now"] { color: var(--pln-on-plan); background: var(--plan); border-color: transparent; box-shadow: 0 6px 18px -8px var(--plan); }
 .pln-stop-note, .pln-stop-st { display: none; }
 .pln-line-note { grid-column: 1; grid-row: 2; margin: 0; font-size: 13px; color: var(--ink-3); line-height: 1.4; }
 .pln-key { grid-column: 2; grid-row: 2; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; justify-content: flex-end; font-size: 12.5px; color: var(--ink-3); }
@@ -239,7 +262,7 @@ button.pln-nextcard:active { transform: scale(0.985); }
 /* What needs you */
 .pln-needs {
   display: flex; flex-direction: column; padding: 20px 16px 10px; border-radius: var(--r-big); background: var(--panel); border: 1px solid var(--line);
-  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); box-shadow: inset 0 1px 0 var(--pln-sheen-5);
 }
 .pln-needs-head { display: flex; align-items: center; gap: 10px; margin: 0 6px 10px; }
 .pln-needs-head h2 { flex: 1; margin: 0; font-family: var(--serif); font-weight: 500; font-size: 29px; letter-spacing: -0.01em; line-height: 1.1; }
@@ -348,7 +371,7 @@ button.pln-change:hover { border-color: var(--line-strong); }
 .pln-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 8px; }
 .pln-chip {
   position: relative; display: grid; grid-template-columns: 16px minmax(0, 1fr); column-gap: 9px; row-gap: 2px; align-items: center; min-height: 54px; padding: 8px 11px;
-  border-radius: 12px; border: 1px solid var(--line); background: rgb(255 255 255 / 0.025); color: inherit; font: inherit; text-align: start; cursor: pointer;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--pln-chip-wash); color: inherit; font: inherit; text-align: start; cursor: pointer;
   transition: background 150ms var(--ease), border-color 150ms var(--ease), opacity 200ms var(--ease), transform 120ms var(--ease);
 }
 .pln-chip .pln-si { grid-row: 1 / span 2; align-self: start; margin-top: 2px; }
@@ -427,7 +450,7 @@ button.pln-change:hover { border-color: var(--line-strong); }
   box-shadow: 0 14px 30px -18px color-mix(in srgb, var(--plan) 80%, transparent);
 }
 .pln-col-stack i { display: block; min-height: 3px; background: var(--c, var(--ink-3)); }
-.pln-col-stack i + i { box-shadow: inset 0 -1px 0 rgb(0 0 0 / 0.28); }
+.pln-col-stack i + i { box-shadow: inset 0 -1px 0 var(--pln-stack-seam); }
 .pln-col-stack i.extra {
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink-2) 34%, transparent) 0 4px, transparent 4px 8px);
   border: 1.5px dashed var(--ink-3); border-bottom: 0; border-radius: 9px 9px 0 0; box-shadow: none;
@@ -512,7 +535,7 @@ button.pln-change:hover { border-color: var(--line-strong); }
 .pln-libhead .pln-sync { min-height: 32px; margin-top: 8px; }
 .pln-lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .pln-lib {
-  --plan: #e9a54b; display: flex; flex-direction: column; gap: 13px; padding: 18px; border-radius: var(--r-big); text-align: start; color: inherit; font: inherit;
+  --plan: var(--pln-plan-default); display: flex; flex-direction: column; gap: 13px; padding: 18px; border-radius: var(--r-big); text-align: start; color: inherit; font: inherit;
   background: linear-gradient(140deg, color-mix(in srgb, var(--plan) 11%, var(--card-tint)), var(--card-tint) 60%);
   border: 1px solid color-mix(in srgb, var(--plan) 26%, var(--line)); transition: border-color 150ms var(--ease), transform 120ms var(--ease);
 }
@@ -547,7 +570,7 @@ button.pln-change:hover { border-color: var(--line-strong); }
 /* ---------- the Plans card on Home (the owner's Milk concept, 28 Oct 2026) ---------- */
 .pln-rail-list { display: flex; flex-direction: column; gap: 10px; }
 .pln-rc {
-  --plan: #e9a54b; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 40px; gap: 16px; align-items: center; padding: 14px 16px;
+  --plan: var(--pln-plan-default); display: grid; grid-template-columns: 56px minmax(0, 1fr) auto 40px; gap: 16px; align-items: center; padding: 14px 16px;
   border-radius: 22px; color: inherit; background: var(--panel); border: 1px solid var(--line);
   transition: border-color 150ms var(--ease), transform 120ms var(--ease);
 }
@@ -640,7 +663,7 @@ button.pln-change:hover { border-color: var(--line-strong); }
 .pln-snode { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; font-size: 12.5px; font-weight: 600; border: 1.5px solid var(--line-strong); color: var(--ink-3); background: var(--bg); }
 .pln-snode svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pln-steps [data-state="done"] .pln-snode { background: var(--up); border-color: transparent; color: var(--on-mark); }
-.pln-steps [data-state="now"] .pln-snode { background: var(--plan); border-color: transparent; color: #1b1306; box-shadow: 0 0 0 4px color-mix(in srgb, var(--plan) 22%, transparent), 0 0 16px color-mix(in srgb, var(--plan) 60%, transparent); }
+.pln-steps [data-state="now"] .pln-snode { background: var(--plan); border-color: transparent; color: var(--pln-on-plan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--plan) 22%, transparent), 0 0 16px color-mix(in srgb, var(--plan) 60%, transparent); }
 .pln-list { list-style: none; margin: 0; padding: 4px 14px; display: flex; flex-direction: column; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
 .pln-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 12px; align-items: start; padding: 10px 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); }
 .pln-list li + li { border-top: 1px solid var(--line); }
@@ -704,8 +727,8 @@ a.pln-noted-row:hover { background: var(--hover); }
   .pln-crumb-sep, .pln-crumb-here { display: none; }
   .pln-barsync { font-size: 13px; }
   .pln-tabs { margin: 0 -16px 16px; padding: 0 16px; }
-  .pln-tabs-in { gap: 22px; padding-inline-end: 28px; mask-image: linear-gradient(to left, transparent, #000 32px); -webkit-mask-image: linear-gradient(to left, transparent, #000 32px); }
-  [dir="rtl"] .pln-tabs-in { mask-image: linear-gradient(to right, transparent, #000 32px); -webkit-mask-image: linear-gradient(to right, transparent, #000 32px); }
+  .pln-tabs-in { gap: 22px; padding-inline-end: 28px; mask-image: linear-gradient(to left, transparent, var(--pln-mask-solid) 32px); -webkit-mask-image: linear-gradient(to left, transparent, var(--pln-mask-solid) 32px); }
+  [dir="rtl"] .pln-tabs-in { mask-image: linear-gradient(to right, transparent, var(--pln-mask-solid) 32px); -webkit-mask-image: linear-gradient(to right, transparent, var(--pln-mask-solid) 32px); }
   .pln-tab { height: 44px; font-size: 14.5px; }
   .pln-tabtitle { font-size: 34px; }
   .pln-top { display: flex; flex-direction: column; gap: 14px; }
@@ -870,7 +893,7 @@ a.pln-noted-row:hover { background: var(--hover); }
   background: color-mix(in srgb, var(--plan) 12%, transparent); border: 1px solid color-mix(in srgb, var(--plan) 38%, var(--line));
 }
 .pln-mv-badge svg.g { width: 26px; height: 26px; }
-.pln-mv-n { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; font-size: 19px; font-weight: 600; color: #141006; background: var(--a); box-shadow: 0 0 0 5px color-mix(in srgb, var(--a) 22%, transparent); }
+.pln-mv-n { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; font-size: 19px; font-weight: 600; color: var(--pln-area-num-ink-base); background: var(--a); box-shadow: 0 0 0 5px color-mix(in srgb, var(--a) 22%, transparent); }
 .pln-mv-head .pln-ph-stop .pln-node { width: 46px; height: 46px; font-size: 17px; }
 .pln-mv-facts { margin: 14px 0 0; }
 .pln-mv-count { font-size: 13.5px; color: var(--ink-3); }
@@ -912,7 +935,7 @@ a.pln-noted-row:hover { background: var(--hover); }
 .pln-area:hover { border-color: color-mix(in srgb, var(--a) 70%, var(--line)); }
 .pln-area-head { display: flex; align-items: center; gap: 12px; padding: 2px; border-radius: 14px; color: inherit; }
 .pln-area-head > svg.g { flex: none; color: var(--ink-3); }
-.pln-area-n { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; font-size: 15px; font-weight: 600; color: #141006; background: var(--a); box-shadow: 0 0 0 4px color-mix(in srgb, var(--a) 20%, transparent); }
+.pln-area-n { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; font-size: 15px; font-weight: 600; color: var(--pln-area-num-ink-base); background: var(--a); box-shadow: 0 0 0 4px color-mix(in srgb, var(--a) 20%, transparent); }
 .pln-area-name { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .pln-area-name b { font-size: 17px; font-weight: 600; line-height: 1.2; }
 .pln-area-name small { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
@@ -958,7 +981,7 @@ a.pln-noted-row:hover { background: var(--hover); }
 .pln-step-n { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-size: 14px; font-weight: 600; color: var(--ink-3); border: 1.5px solid var(--line-strong); background: var(--bg); }
 .pln-step-n svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .pln-step[data-state="done"] .pln-step-n { background: var(--up); border-color: transparent; color: var(--on-mark); }
-.pln-step[data-state="now"] .pln-step-n { background: var(--plan); border-color: transparent; color: #1b1306; box-shadow: 0 0 0 4px color-mix(in srgb, var(--plan) 24%, transparent); }
+.pln-step[data-state="now"] .pln-step-n { background: var(--plan); border-color: transparent; color: var(--pln-on-plan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--plan) 24%, transparent); }
 .pln-step-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 14.5px; line-height: 1.35; }
 .pln-step-t small { font-size: 12.5px; color: var(--ink-3); }
 .pln-step[data-state="done"] .pln-step-t small { color: var(--up); }
@@ -1007,18 +1030,16 @@ a.pln-noted-row:hover { background: var(--hover); }
 
 /* ---------- the map's colours (the owner's pick, 28 Oct 2026): "A, vivid" on a clean black room in the dark;
    the same family a step deeper on Milk in the light. Each area takes the next one, in launch order. ---------- */
-:is(.pln, .pln-panel) { --area-1: #22c55e; --area-2: #3b82f6; --area-3: #f59e0b; --area-4: #a855f7; --area-5: #ef4444; --area-6: #14b8a6; --area-7: #38bdf8; --area-8: #f472b6; --map-room: #0b0c0e; }
-@media (prefers-color-scheme: light) { :root:where(:not([data-theme="dark"])) :is(.pln, .pln-panel) { --area-1: #16a34a; --area-2: #2563eb; --area-3: #d97706; --area-4: #9333ea; --area-5: #dc2626; --area-6: #0d9488; --area-7: #0284c7; --area-8: #db2777; --map-room: #f3eee6; } }
-:root[data-theme="light"] :is(.pln, .pln-panel) { --area-1: #16a34a; --area-2: #2563eb; --area-3: #d97706; --area-4: #9333ea; --area-5: #dc2626; --area-6: #0d9488; --area-7: #0284c7; --area-8: #db2777; --map-room: #f3eee6; }
+:is(.pln, .pln-panel) { --area-1: var(--pln-area-1); --area-2: var(--pln-area-2); --area-3: var(--pln-area-3); --area-4: var(--pln-area-4); --area-5: var(--pln-area-5); --area-6: var(--pln-area-6); --area-7: var(--pln-area-7); --area-8: var(--pln-area-8); --map-room: var(--pln-map-room); }
 .pln-mapv { background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 8%, transparent) 1px, transparent 1.4px) 0 0 / 22px 22px, var(--map-room); border-color: var(--line); }
 .pln-area { border-color: color-mix(in srgb, var(--a) 72%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--a) 16%, var(--map-room)), color-mix(in srgb, var(--a) 6%, var(--map-room)) 70%); }
 .pln-area[data-focus] { border-color: var(--a); }
 .pln-block { border-color: color-mix(in srgb, var(--a) 55%, transparent); background: color-mix(in srgb, var(--a) 8%, var(--map-room)); }
 .pln-step { background: var(--map-room); }
-.pln-mv-n, .pln-area-n { color: #0b0c0e; }
+.pln-mv-n, .pln-area-n { color: var(--pln-area-num-ink); }
 /* the room around the map is a clean black, not the plan's amber light (dark only; Milk keeps its warmth) */
-@media (prefers-color-scheme: dark) { html.pln-maproom:not([data-theme="light"]) { --glow: #1b1f27 !important; } }
-html.pln-maproom[data-theme="dark"] { --glow: #1b1f27 !important; }
+@media (prefers-color-scheme: dark) { html.pln-maproom:not([data-theme="light"]) { --glow: var(--pln-map-glow) !important; } }
+html.pln-maproom[data-theme="dark"] { --glow: var(--pln-map-glow) !important; }
 
 /* ---------- requirements (the owner's edit boards, 28 Oct 2026): a part's steps, an area's parts, as a checklist he
    ticks, renames, removes and adds to. Beside the map on a computer (the dock), in the side panel or bottom sheet
@@ -1032,7 +1053,7 @@ html.pln-maproom[data-theme="dark"] { --glow: #1b1f27 !important; }
   .pln-dock {
     display: flex; flex-direction: column; position: sticky; top: 14px; max-height: calc(100dvh - 28px); overflow-y: auto; overscroll-behavior: contain;
     padding: 16px 16px 14px; border-radius: 22px; background: color-mix(in srgb, var(--bg) 70%, var(--map-room)); border: 1px solid var(--line);
-    box-shadow: 0 24px 60px -36px rgb(0 0 0 / 0.7);
+    box-shadow: 0 24px 60px -36px var(--pln-confirm-shadow);
   }
 }
 .pln-req { --row-base: var(--bg); }
@@ -1055,7 +1076,7 @@ html.pln-maproom[data-theme="dark"] { --glow: #1b1f27 !important; }
   background: color-mix(in srgb, var(--a) 14%, transparent); border: 1px solid color-mix(in srgb, var(--a) 34%, transparent);
 }
 .pln-req-icon svg.g { width: 22px; height: 22px; }
-.pln-req-n { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; font-size: 17px; font-weight: 600; color: #0b0c0e; background: var(--a); box-shadow: 0 0 0 5px color-mix(in srgb, var(--a) 22%, transparent); }
+.pln-req-n { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; font-size: 17px; font-weight: 600; color: var(--pln-area-num-ink); background: var(--a); box-shadow: 0 0 0 5px color-mix(in srgb, var(--a) 22%, transparent); }
 .pln-ph .pln-req-icon { width: 54px; height: 54px; border-radius: 16px; }
 .pln-ph .pln-req-n { width: 46px; height: 46px; margin: 4px; }
 /* done: the area's number turns into a check, as on the map */
@@ -1166,7 +1187,7 @@ button.pln-ck-ro { background: none; border: 0; padding: 0; font: inherit; curso
 .pln-menu-it svg.g { width: 17px; height: 17px; color: var(--ink-2); flex: none; }
 .pln-menu-it.del, .pln-menu-it.del svg.g { color: var(--down); }
 /* "Remove requirement?" */
-.pln-confirm { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / 0.55); opacity: 0; transition: opacity 160ms var(--ease); }
+.pln-confirm { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: var(--pln-scrim); opacity: 0; transition: opacity 160ms var(--ease); }
 .pln-confirm.on { opacity: 1; }
 .pln-confirm-card {
   width: min(360px, 100%); padding: 24px 20px 16px; border-radius: 26px; text-align: center; background: var(--float); border: 1px solid var(--line);
@@ -1180,7 +1201,7 @@ button.pln-ck-ro { background: none; border: 0; padding: 0; font: inherit; curso
 .pln-confirm-btns { display: flex; flex-direction: column; gap: 8px; }
 .pln-confirm-btns .btn { height: 48px; justify-content: center; border-radius: 999px; font-size: 15px; }
 .pln-btn-del { background: var(--down); border-color: transparent; color: var(--on-mark); }
-.pln-btn-del:hover { background: color-mix(in srgb, var(--down) 88%, #000); }
+.pln-btn-del:hover { background: color-mix(in srgb, var(--down) 88%, var(--pln-del-shade)); }
 /* the area's own map: a Requirements row (on a computer the dock shows them); a picked block is ringed; a live part is green */
 .pln-mv-reqrow { margin: 14px 0 0; }
 .pln-mv-reqbtn {

@@ -12,11 +12,11 @@ import * as R from "./waiting-rules.js";
 import * as I from "./waiting-ink.js";
 import * as M from "./waiting-marks.js";
 
-const BRASS = '<svg class="wt-pin" viewBox="-9 -9 18 18" aria-hidden="true"><circle r="5" fill="url(#wt-brass)" stroke="#4a3410" stroke-width=".5"/><circle cx="-1.5" cy="-1.6" r="1.3" fill="#fff6d8" opacity=".8"/></svg>';
-const WAX = '<svg class="wt-pin wax" viewBox="-9 -9 18 18" aria-hidden="true"><path d="M-7,-1 C-8,-6 -3,-8 0,-7.5 C4,-8.5 8,-5 7.2,-1 C8.4,3 5,7.5 0,7 C-4,7.8 -8.2,4 -7,-1Z" fill="url(#wt-wax)" stroke="#3d0707" stroke-width=".5"/><circle r="4" fill="none" stroke="#5a0e0e" stroke-width=".7"/><path d="M-2,-1.5 L0,1.8 L2,-1.5" fill="none" stroke="#e9a59a" stroke-width=".6"/></svg>';
+const BRASS = '<svg class="wt-pin" viewBox="-9 -9 18 18" aria-hidden="true"><circle r="5" fill="url(#wt-brass)" style="stroke:var(--wt-brass-rim)" stroke-width=".5"/><circle cx="-1.5" cy="-1.6" r="1.3" style="fill:var(--wt-brass-glint)" opacity=".8"/></svg>';
+const WAX = '<svg class="wt-pin wax" viewBox="-9 -9 18 18" aria-hidden="true"><path d="M-7,-1 C-8,-6 -3,-8 0,-7.5 C4,-8.5 8,-5 7.2,-1 C8.4,3 5,7.5 0,7 C-4,7.8 -8.2,4 -7,-1Z" fill="url(#wt-wax)" style="stroke:var(--wt-wax-rim)" stroke-width=".5"/><circle r="4" fill="none" style="stroke:var(--wt-wax-ring)" stroke-width=".7"/><path d="M-2,-1.5 L0,1.8 L2,-1.5" fill="none" style="stroke:var(--wt-wax-mark)" stroke-width=".6"/></svg>';
 const DEFS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <radialGradient id="wt-brass" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#f6e2a6"/><stop offset=".45" stop-color="#b08a3e"/><stop offset="1" stop-color="#5c4318"/></radialGradient>
-  <radialGradient id="wt-wax" cx=".38" cy=".32" r=".8"><stop offset="0" stop-color="#c2413a"/><stop offset=".55" stop-color="#8e1b1b"/><stop offset="1" stop-color="#4a0b0b"/></radialGradient>
+  <radialGradient id="wt-brass" cx=".35" cy=".3" r=".75"><stop offset="0" style="stop-color:var(--wt-brass-1)"/><stop offset=".45" style="stop-color:var(--wt-brass-2)"/><stop offset="1" style="stop-color:var(--wt-brass-3)"/></radialGradient>
+  <radialGradient id="wt-wax" cx=".38" cy=".32" r=".8"><stop offset="0" style="stop-color:var(--wt-wax-1)"/><stop offset=".55" style="stop-color:var(--wt-wax-2)"/><stop offset="1" style="stop-color:var(--wt-wax-3)"/></radialGradient>
   <filter id="wt-bleed" x="-5%" y="-40%" width="110%" height="180%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="1" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.1"/></filter></defs></svg>`;
 const INK = "#2b1d12";
 const quick = () => !!globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -244,7 +244,8 @@ export function createWaiting(d) {
     c.style.opacity = "1";
     const x = c.getContext("2d");
     x.clearRect(0, 0, 1e5, 1e5);
-    x.lineCap = "round"; x.lineJoin = "round"; x.strokeStyle = INK; x.fillStyle = INK;
+    const ink = getComputedStyle(c).getPropertyValue("--wt-ink").trim() || INK; // the look's own ink (white on Ink's black card)
+    x.lineCap = "round"; x.lineJoin = "round"; x.strokeStyle = ink; x.fillStyle = ink;
     return x;
   }
   function stroke(x, draw, w) {

@@ -18,7 +18,7 @@ const UPDATE_WORDS = {
 };
 
 export function createSettings(d, reels) {
-  const { $, esc, g, api, post, toast, ago, theme, setTheme, phonePanel, inside } = d;
+  const { $, esc, g, api, post, toast, ago, theme, setTheme, look, setLook, phonePanel, inside } = d;
   const inNews = d.place === "news";
   const device = devicePrefs(globalThis.localStorage);
   const S = { reels: null, health: null, voices: [], busy: false, insideApps: [], saved: null, clips: null, invites: null };
@@ -113,6 +113,12 @@ export function createSettings(d, reels) {
     const t = theme();
     const themeSeg = [["auto", "Auto", "sun-moon"], ["dark", "Dark", "moon"], ["light", "Light", "sun"]]
       .map(([v, l, i]) => `<button type="button" data-act="set-theme" data-v="${v}" aria-pressed="${t === v}">${g(i)}${l}</button>`).join("");
+    const k = look ? look() : "classic"; // MK News shares this file and has no look switch
+    const lookSeg = [["ink", "Ink", "droplet"], ["classic", "Classic", "layers"]]
+      .map(([v, l, i]) => `<button type="button" data-act="set-look" data-v="${v}" aria-pressed="${k === v}">${g(i)}${l}</button>`).join("");
+    const appearance = `<section class="section"><div class="section-head"><h2>Appearance</h2></div><div class="set-card">
+        ${row("Look", k === "ink" ? "Ink: black liquid, the family look. Classic is the launcher's glass look." : "Classic: the launcher's glass look. Ink is the black liquid.", `<div class="seg" role="group" aria-label="Look">${lookSeg}</div>`, "device", " wrap")}
+        ${k === "classic" ? row("Theme", "Auto follows your device.", `<div class="seg" role="group" aria-label="Theme">${themeSeg}</div>`, "device", " wrap") : ""}</div></section>`;
     const h = S.health;
     const up = h?.update || {};
     const word = UPDATE_WORDS[up.state] || (h ? "Unknown" : "Checking…");
@@ -154,10 +160,9 @@ export function createSettings(d, reels) {
     </div>`;
     }
     return `<div class="settings">
+      ${appearance}
       <section class="section"><div class="section-head"><h2>Reels</h2></div>${reelsCard}</section>
       <section class="section"><div class="section-head"><h2>Video clips</h2></div>${clipsCard}</section>
-      <section class="section"><div class="section-head"><h2>Appearance</h2></div><div class="set-card">
-        ${row("Theme", "Auto follows your device.", `<div class="seg" role="group" aria-label="Theme">${themeSeg}</div>`, "device", " wrap")}</div></section>
       ${source.BACKUP || !inside ? "" : `<section class="section"><div class="section-head"><h2>Apps</h2></div><div class="set-card">
         ${row("Open apps inside the Launcher", `Full screen, no browser bars, with a Back to Launcher button you can drag to any corner. Only apps that allow it${S.insideApps.length ? ` (${esc(S.insideApps.join(", "))})` : ""}; the rest open in the browser.`, sw("set-inside", insideOn(), "Open apps inside the Launcher"), "device")}</div></section>`}
       <section class="section"><div class="section-head"><h2>Backup on GitHub</h2></div>${backupCard}</section>
@@ -328,6 +333,7 @@ export function createSettings(d, reels) {
         break;
       }
       case "set-theme": setTheme(el.dataset.v); paint(); $(`[data-act="set-theme"][data-v="${el.dataset.v}"]`)?.focus(); break;
+      case "set-look": setLook(el.dataset.v); paint(); $(`[data-act="set-look"][data-v="${el.dataset.v}"]`)?.focus(); break;
       case "set-leave": d.leave?.(); break;
       case "set-invite-remove": {
         try {
