@@ -276,3 +276,21 @@
   :root[data-skin="ink"] html.route-home .topbar:not(.scrolled) .icon-btn,
   :root[data-skin="ink"].route-home .topbar .icon-btn { background: var(--vk-btn-bg); border-color: var(--vk-rim-soft); }
 }
+
+/* ---------- the dip (kit 0.3.3): living black oil on every control (skin-ink.js names them; the kit draws it all) ----------
+   The oil reaches 11 px past a control and pools under it; words that sit closer than that are lifted above it. */
+:root[data-skin="ink"] :is(.tile .name, .brand .wordmark, .day h3, .section-head > :is(h2, .meta, .st), .row > .main, .row .end > :not(.vk-dip-host, .vk-dip),
+  .rb > span:not(.vk-dip), .cin-thumbs, .pln-area-name,
+  .pln-mv-pct, .pln-barsync, .panel-head .main > :is(h2, .about)) { position: relative; z-index: 1; }
+/* already placed (nothing moves), only lifted: a dipped icon's status dot, the slips' pins and wax, film posters, screenshots */
+:root[data-skin="ink"] :is(.vk-dip-host > .badge, .wt-pin, .cin-poster, .change .shot) { z-index: 1; }
+/* the strands' one overlay sits under the sheet (z 70) and Plans' remove question (z 90) by default: while one is open
+   it rises above it (under the toast), so their own controls pull strands too; the page under them is out of the oil's
+   reach then (skin-ink.js), so nothing else can pull a strand across them */
+:root[data-skin="ink"] body:has(> #panel:not([hidden]), > .pln-confirm) > .vk-dip-overlay { z-index: 92; }
+/* Plans' text tabs have no padding: their words reach their own box, so the rim runs under the words, not over them
+   (each tab holds its own layers; its background, then the oil, then the words) */
+:root[data-skin="ink"] :is(.pln-tab, .pln-req-tab).vk-dip-host { z-index: 0; }
+:root[data-skin="ink"] :is(.pln-tab, .pln-req-tab) > .vk-dip { z-index: -1; }
+/* a link that wears the oil: pressing it and pulling off stretches the oil; the browser's link drag would cancel the press */
+:root[data-skin="ink"] a.vk-dip-host { -webkit-user-drag: none; }

@@ -1,7 +1,7 @@
 /* The shared ink kit (see VERSION). */
 "use strict";
 (() => {
-const VERSION = "0.2.0";
+const VERSION = "0.3.3";
 const ROLES = ["collar", "pod", "card", "top", "ring", "panel"];
 const STATES = ["idle", "listening", "working", "calm"];
 const MODES = ["full", "cheap", "still"];
@@ -468,7 +468,7 @@ void main() {
   }
 
   // ============================================================================================ state
-  const V = { on: false, view: "start", state: "idle", mode: opt.mode, q: 0, over: 0, guard: "idle", pre: null, stepAt: 0, simMs: 0, passMs: 0, cx: null, cy: null, cs: 1, dead: false, raf: 0, last: 0, t0: performance.now(), stats: { frames: 0, gaps: [], ms: [] },
+  const V = { on: false, view: "start", state: "idle", mode: opt.mode, q: 0, over: 0, guard: "idle", pre: null, stepAt: 0, simMs: 0, passMs: 0, cx: null, cy: null, cs: 1, dead: false, raf: 0, tm: 0, last: 0, t0: performance.now(), stats: { frames: 0, gaps: [], ms: [] },
     lvl: 0, lvlT: 0, ptr: null, tap: null, scanAt: 0, busy: false, backdrop: !opt.creature, dirty: true };
   const L = { base: null, cv: null, g: null, layer: null, fixed: true, lean: false, W: 0, H: 0, k: 1, ax: 0, ay: 0, S: 1, U: 1, cheap: false };
   const sy = () => (L.fixed ? window.scrollY : 0);
@@ -1035,8 +1035,10 @@ void main() {
     }
     const low = R.mic ? R.mic.y + d - R.mic.d - 44 * L.U : R.ring ? R.ring.y + d - R.ring.r - 40 * L.U : H * 0.4;
     // never smaller than this: on views where a card sits high (the working ring) the face goes on behind it
-    const u = clamp((low - top - 18) / 168, R.phone ? 0.95 : 1.3, Math.min(W / 290, 2.2));
-    const fit = { x: W / 2, y: top + 18 + 14 * u + Math.max(0, low - MAW.y1 * u - top - 18 - 14 * u) * 0.3, u };
+    // (drawn eyes and their brows climb above the eye line: keep them under the header, the maw clear of the button)
+    const hi = styleOf() ? (R.phone ? 44 : 30) : 14;
+    const u = clamp((low - top - 18) / (154 + hi), R.phone ? 0.95 : 1.3, Math.min(W / 290, 2.2));
+    const fit = { x: W / 2, y: top + 18 + hi * u + Math.max(0, low - MAW.y1 * u - top - 18 - hi * u) * 0.3, u };
     if (V.cx != null) fit.x = V.cx;   // v.creature({ x, y, scale })
     if (V.cy != null) fit.y = V.cy;
     fit.u *= V.cs;
@@ -1051,7 +1053,8 @@ void main() {
     MAW = desk ? MAW_DESK : MAW_PHONE;
     const fit = faceFit(), st = !!V.still, d = dy();
     const view = V.view, rec = MIC.state === "recording", working = view === "working", failed = view === "failed", result = view === "result";
-    const EY = orbsOn() ? ORBS : EYES, words = desk ? R.keep : R.text;
+    const sty = styleOf(), EY = sty ? sty.eyes : orbsOn() ? ORBS : EYES, words = desk ? R.keep : R.text;
+    F.t = t;
     const hold = desk ? (R.mic ? { x: R.mic.x, y: R.mic.y + d, r: R.mic.d } : R.ring ? { x: R.ring.x, y: R.ring.y + d, r: R.ring.r } : null) : null;
     const hover = !!(hold && R.mic && V.ptr && Math.hypot(V.ptr.x - hold.x, V.ptr.y - hold.y) < hold.r * 1.15);
     F.hover = hover;
@@ -1081,8 +1084,11 @@ void main() {
     // how open: wide while he speaks, slits while it works, droopy when it failed; each one blinks on its own
     const base = working ? 0.32 : failed ? 0.5 : rec ? 1.12 + 0.22 * V.lvl : MIC.state === "hold" ? 1.08 : 1;
     let blinking = F.eyes.filter((e) => t - e.blink < 0.2).length;
+    // drawn eyes: the brow drops while he speaks (it listens) and lifts with his loudness; low while it works
+    const sbase = working ? 0.42 : failed ? 0.62 : rec ? 0.45 + 1.15 * V.lvl : MIC.state === "hold" ? 0.85 : 1;
     F.eyes.forEach((e, i) => {
-      let want = sinks ? (i < 2 ? 0.5 : 0) : base;
+      if (i >= EY.length) { e.k = 0; e.a = 0; return; }
+      let want = sinks ? (i < 2 ? 0.5 : 0) : sty ? sbase : base;
       const k = [4, 5, 2, 3, 0, 1].indexOf(i), at = 0.45 + k * 0.2 + 0.07 * hash(i);   // the arrival: one after another
       if (!st && ti < at) want = 0;
       if (lv > 0) want = 0;
@@ -1090,7 +1096,8 @@ void main() {
         if (blinking < 2 && !working) { e.blink = t; blinking += 1; }
         e.blinkAt = t + 2.2 + hash(t * 3.7 + i) * 6.5 + (hash(i + t) < 0.2 ? -1.8 : 0);
       }
-      const bt = t - e.blink, bk = !st && bt < 0.2 ? Math.abs(Math.cos(bt / 0.2 * Math.PI)) : 1;
+      const bt = t - e.blink, bk = sty || st || bt >= 0.2 ? 1 : Math.abs(Math.cos(bt / 0.2 * Math.PI));
+      e.tw = sty && !st && bt < 0.32 ? Math.sin(Math.PI * bt / 0.32) : 0;
       if (flinch) want *= 1 + 0.4 * flinch;
       e.open = st ? want : lerp(e.open, want, rate(dt, ti < 3 ? 24 : 10));
       e.k = e.open * bk;
@@ -1104,7 +1111,7 @@ void main() {
     });
     // now and then one more eye opens somewhere in the mass, looks round, and closes again
     if (!st && t > F.extraAt && ti > 4 && !working && !sinks && !lv) { F.extra = { e: pick(EY === ORBS ? ORB_EXTRA : EXTRA), t0: t, dur: 2 + rand() * 1.6 }; F.extraAt = t + 6 + rand() * 9; }
-    if (F.extra && (EY === ORBS) !== (F.extra.e.length === 3)) F.extra = null;
+    if (F.extra && ((EY === ORBS) !== (F.extra.e.length === 3) || sty)) F.extra = null;
     if (F.extra && (t - F.extra.t0 > F.extra.dur || lv)) F.extra = null;
     // the maw: a glossy seam that twitches; it parts with the voice; sealed by strands while working; once wide at the arrival
     if (!st && t > F.twitchAt) { F.twitch = t; F.twitchAt = t + 2.2 + rand() * 4; }
@@ -1154,6 +1161,556 @@ void main() {
   /** How much of the head's lean a point at face height y takes: the crown and the eyes, never the gripping jaw. */
   const E0 = (e) => (e.seed ??= Math.random() * 6);
   const leanW = (y) => clamp((MAW.y0 - 6 - y) / 90, 0, 1);
+
+  // ---------------------------------------------------------------- drawn eyes: v.tune({ Eyes: 1 }) (0 or unset: as before)
+  // TWO huge drawn eyes, "melt wedge": a hard faceted top (two brow planes, inner end low = angry), the lower edge melting
+  // into thick drips. The shape is given for the RIGHT eye in face units and drawn taller than it shows: the brow lines
+  // clip its top. The left eye is the mirror, a little smaller, its brow cocked. The fill is wet flesh, not paint: a
+  // pearly bulge darkening to the rim, membrane fibres, faint veins, a wet dark band under the brow, black oil lapping
+  // over the rim, and a softbox reflection plus a hot specular that slide with what it watches. No pupil.
+  // The brow drops while he speaks or it works (narrow, the whole length), lifts at the outer end when he is loud (flare),
+  // twitches at rest (never a blink).
+  const STYLES = {
+    // round 2's D, pulled longer and sharper into a slanted wedge: D's brow runs on to a hooked 42 degree outer tip, the
+    // lower edge rises from its low outer belly to a pointed inner corner set back from the nose (a black gap between
+    // the two eyes at every size), and melts in drips of different lengths
+    1: { shape: [[18, 5.5], [40, 19], [66, 28.5], [86, 31], [100, 26], [111, 13], [146, -30], [148, -74], [60, -80], [16, -24]],
+      brow: [[-1, 15], [56, -16]], brow2: [[56, -16], [150, -30.2]], asym: [-4, 0.95], root: [[98, -44], [92, -40]],
+      drips: [[52, 25.5, 13, 1.7, 8], [83, 31, 30, 3.1, 4.5], [102, 24, 7, 4.4, 6.5]] },
+  };
+  for (const s of Object.values(STYLES)) s.eyes = [[-62, 4, 100, 30, 0], [62, 4, 100, 30, 0]];
+  const styleOf = () => MFAIL ? null : STYLES[G.tune.Eyes | 0] || null;
+  // the membrane, baked once in the right eye's face units: a relief (a bulge that rolls off at the rim, long creased
+  // folds along the eye, a fine crinkle) and an even milky colour, lit from MN directions round the top; and the strand
+  // mass round it (several hundred black fibres stamped as relief along a flow that hugs the rim, crosses at both
+  // corners and fans out past the tips, over a black socket), lit from FN directions, specular only. Each frame only
+  // picks the two nearest lights and blends them.
+  const MN = 8, MA0 = -3.05, MA1 = -0.1, FN = 5;
+  let MEMB = null, MBAKE = null, MFAIL = false, MLIT = null;
+  /** The baked membrane and strand mass, or null while they bake: in slices of a few ms between frames (never inside
+   *  one), a second or two on a busy PC; the eye shows a plain milky fill until then. */
+  function membraneTex() {
+    if (MEMB || MFAIL || typeof document === "undefined") return MEMB;
+    if (!MBAKE) {
+      try {
+        MBAKE = membraneBake();
+        const step = () => { try { const t0 = performance.now(); while (performance.now() - t0 < 8) if (MBAKE.next().done) return; setTimeout(step, 0); } catch (e) { membraneFail(e); } };
+        setTimeout(step, 0);
+      } catch (e) { membraneFail(e); }
+    }
+    return null;
+  }
+  /** The bake failed (no 2D context, no canvas memory on a phone): stop for good, free the canvases, and let styleOf() give
+   *  the earlier eyes from now on (they need no bake). */
+  function membraneFail(e) {
+    if (MEMB) throw e;
+    MFAIL = true; MBAKE = null;
+    for (const c of MLIT || []) { c.width = 0; c.height = 0; }
+    MLIT = null;
+    console.warn("drawn eyes: the membrane bake failed (" + ((e && e.message) || e) + "); using the earlier eyes");
+  }
+  /** Signed distance (+ inside) from (x, y) to polygon P. */
+  function sdPoly(P, x, y) {
+    let dmin = 1e9, inside = false;
+    for (let j = 0, k = P.length - 1; j < P.length; k = j, j += 1) {
+      const [ax, ay] = P[k], [bx, by] = P[j], ex = bx - ax, ey = by - ay, f = clamp(((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey), 0, 1);
+      dmin = Math.min(dmin, Math.hypot(x - ax - ex * f, y - ay - ey * f));
+      if ((ay > y) !== (by > y) && x < ax + (y - ay) * ex / ey) inside = !inside;
+    }
+    return inside ? dmin : -dmin;
+  }
+  const sstep = (a, b, x) => { const f = clamp((x - a) / (b - a), 0, 1); return f * f * (3 - 2 * f); };
+  function* membraneBake() {
+    const sty = STYLES[1], sc = 3.4, x0 = 8, y0 = -74, w = 148, h = 136, NW = Math.round(w * sc), NH = Math.round(h * sc), NP = NW * NH;
+    // gradient noise
+    const perm = new Uint8Array(512), GX = new Float32Array(256), GY = new Float32Array(256), p = [];
+    for (let j = 0; j < 256; j += 1) { p.push(j); const a = hash(j * 3.17 + 0.3) * TAU; GX[j] = Math.cos(a); GY[j] = Math.sin(a); }
+    for (let j = 255; j > 0; j -= 1) { const q = Math.floor(hash(j * 1.37 + 0.5) * (j + 1)); [p[j], p[q]] = [p[q], p[j]]; }
+    for (let j = 0; j < 512; j += 1) perm[j] = p[j & 255];
+    const nz = (x, y) => {
+      const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, X = xi & 255, Y = yi & 255;
+      const fu = xf * xf * xf * (xf * (xf * 6 - 15) + 10), fv = yf * yf * yf * (yf * (yf * 6 - 15) + 10);
+      const k00 = perm[perm[X] + Y], k10 = perm[perm[X + 1] + Y], k01 = perm[perm[X] + Y + 1], k11 = perm[perm[X + 1] + Y + 1];
+      const a = GX[k00] * xf + GY[k00] * yf, b = GX[k10] * (xf - 1) + GY[k10] * yf, c = GX[k01] * xf + GY[k01] * (yf - 1), d = GX[k11] * (xf - 1) + GY[k11] * (yf - 1);
+      return 1.4 * (a + (b - a) * fu + (c - a + (a - b + d - c) * fu) * fv);
+    };
+    // signed distance (face units, + inside) to the eye without its brows (they move; their shade is drawn per frame)
+    // and its drips (capsules)
+    const P = sty.shape, caps = sty.drips.map(([x, y, len, , wd]) => [x, y - 6, x, y + len, wd * 0.55]);
+    const sdCap = (x, y) => { let sd = -1e9; for (const [ax, ay, bx, by, r] of caps) { const ey = by - ay, f = clamp((y - ay) / ey, 0, 1); sd = Math.max(sd, r - Math.hypot(x - ax - (bx - ax) * f, y - ay - ey * f)); } return sd; };
+    const sdAt = (x, y) => Math.max(sdPoly(P, x, y), sdCap(x, y));
+    const H = new Float32Array(NP), HS = new Float32Array(NP), SD = new Float32Array(NP), CP = new Float32Array(NP), A = new Float32Array(NP * 3);
+    const ca = Math.cos(-0.24), sa = Math.sin(-0.24);
+    for (let iy = 0; iy < NH; iy += 1) for (let ix = 0; ix < NW; ix += 1) {
+      if (!ix) yield;
+      const x = x0 + (ix + 0.5) / sc, y = y0 + (iy + 0.5) / sc, o = iy * NW + ix, sd = sdAt(x, y);
+      // along / across the eye, barely warped (no marble swirl)
+      const wx = x + 3 * nz(x * 0.02 + 3.1, y * 0.02 + 1.7), wy = y + 2 * nz(x * 0.02 + 8.3, y * 0.02 + 4.2);
+      const al = (wx * ca + wy * sa), ac = (-wx * sa + wy * ca);
+      // a few long soft folds along the eye (low: the film is smooth), a faint crinkle in patches
+      const fold = nz(al * 0.011 + 5.3, ac * 0.07 + 2.1) + 0.35 * nz(al * 0.024 + 1.1, ac * 0.15 + 7.4);
+      const r1 = 1 - Math.abs(nz(al * 0.16 + 11, ac * 0.34 + 3) + 0.5 * nz(x * 0.3 + 7, y * 0.3 + 2)), cm = clamp(1.7 * nz(x * 0.05 + 61, y * 0.05 + 37) - 0.25, 0, 1);
+      // a mixed-up wet crinkle: wavy crease lines with hard glints, in three families of different scale and direction
+      // (some long, some short), each broken in patches, with a dark fold beside each line
+      let cl = 0, cd = 0;
+      {
+        const wq = nz(x * 0.05 + 13, y * 0.05 + 4), n1 = nz(x * 0.055 + 2 * wq + 1.3, y * 0.08 + 7.7), n2 = nz(x * 0.09 + 31, y * 0.06 - 1.5 * wq + 2.2);
+        const n3 = nz(x * 0.13 - 1.2 * wq + 71, y * 0.16 + 5.5);
+        const m1 = sstep(-0.05, 0.35, nz(x * 0.04 + 51, y * 0.05 + 9)), m2 = sstep(0.0, 0.4, nz(x * 0.045 + 23, y * 0.04 + 61)), m3 = sstep(0.05, 0.45, nz(x * 0.07 + 37, y * 0.07 + 83));
+        const r1c = Math.max(0, 1 - Math.abs(n1) * 9), r2c = Math.max(0, 1 - Math.abs(n2) * 10), r3c = Math.max(0, 1 - Math.abs(n3) * 11);
+        cl = m1 * r1c * r1c + 0.8 * m2 * r2c * r2c + 0.6 * m3 * r3c * r3c;
+        const s1 = Math.max(0, 1 - Math.abs(n1 - 0.09) * 8), s2 = Math.max(0, 1 - Math.abs(n2 - 0.08) * 9), s3 = Math.max(0, 1 - Math.abs(n3 - 0.07) * 10);
+        cd = 0.7 * (m1 * s1 * s1 + 0.8 * m2 * s2 * s2 + 0.6 * m3 * s3 * s3);
+      }
+      const s = Math.max(0, sd), dome = 5 * (1 - Math.exp(-s / 10));
+      HS[o] = dome + 0.6 * fold; H[o] = HS[o] + 0.45 * (0.35 + 0.65 * cm) * r1 * r1 * r1 + 1.35 * cl; SD[o] = sd;
+      // colour: an even milky film lit from inside, soft cloudy patches, a little darker only right at the rim (the
+      // strands' own shadow does the rest)
+      const cloud = 0.5 + 0.5 * nz(x * 0.035 + 21, y * 0.04 + 13), cl2 = 0.5 + 0.5 * (nz(x * 0.07 + 5, y * 0.09 + 91) + 0.5 * nz(x * 0.15 + 17, y * 0.17 + 3)), warm = clamp((nz(x * 0.025 + 41, y * 0.025 + 7) - 0.15) * 2, 0, 1);
+      const capc = clamp(sdCap(x, y) / 2, 0, 1) * clamp(1.5 - s / 3, 0, 1), c0 = clamp((s - 1) / 16, 0, 1);
+      const core = Math.max(0.7 * capc, (0.5 + 0.5 * c0) * (0.42 + 0.36 * cloud + 0.24 * cl2)), cav = clamp(-fold * 0.8, 0, 1);
+      CP[o] = capc;
+      const pool = clamp(1.6 * nz(x * 0.045 + 33, y * 0.06 + 71) - 0.25, 0, 1) * (1 - capc);
+      let r0 = lerp(132, 232, core), g0 = lerp(142, 234, core), b0 = lerp(166, 238, core);
+      r0 = lerp(r0, 240, warm * 0.25 * core); g0 = lerp(g0, 234, warm * 0.25 * core); b0 = lerp(b0, 224, warm * 0.25 * core);
+      r0 = lerp(r0, 128, 0.35 * pool); g0 = lerp(g0, 138, 0.35 * pool); b0 = lerp(b0, 160, 0.35 * pool);
+      const dk = 1 - 0.1 * cav - 0.3 * Math.min(1, cd); r0 *= dk; g0 *= dk; b0 *= 1 - 0.06 * cav - 0.22 * Math.min(1, cd);
+      const rim = Math.max(Math.pow(clamp(sd / 5, 0, 1), 0.6), 0.9 * clamp(sdCap(x, y) / 2.5, 0, 1));
+      A[o * 3] = lerp(30, r0, rim); A[o * 3 + 1] = lerp(36, g0, rim); A[o * 3 + 2] = lerp(52, b0, rim);
+    }
+    // two normals: the smooth body (for the milky diffuse light) and the full crinkled film (for the wet glints)
+    const nrm = (Hm) => {
+      const NX = new Float32Array(NP), NY = new Float32Array(NP), NZ = new Float32Array(NP);
+      for (let iy = 0; iy < NH; iy += 1) for (let ix = 0; ix < NW; ix += 1) {
+        const o = iy * NW + ix, l = Hm[iy * NW + Math.max(0, ix - 1)], r = Hm[iy * NW + Math.min(NW - 1, ix + 1)], u0 = Hm[Math.max(0, iy - 1) * NW + ix], d0 = Hm[Math.min(NH - 1, iy + 1) * NW + ix];
+        const dx = (r - l) * sc / 2, dy = (d0 - u0) * sc / 2, k = 1 / Math.hypot(dx, dy, 1);
+        NX[o] = -dx * k; NY[o] = -dy * k; NZ[o] = k;
+      }
+      return [NX, NY, NZ];
+    };
+    const [NX, NY, NZ] = nrm(H); yield;
+    const [SX, SY, SZ] = nrm(HS); yield;
+    const half = (m, n) => {
+      const ang = MA0 + (MA1 - MA0) * m / (n - 1), lz = 0.62, lr = Math.sqrt(1 - lz * lz), Lx = Math.cos(ang) * lr, Ly = Math.sin(ang) * lr;
+      const hx = Lx, hy = Ly, hz = lz + 1, hl = Math.hypot(hx, hy, hz);
+      return [Lx, Ly, lz, hx / hl, hy / hl, hz / hl];
+    };
+    const lit = []; MLIT = [];   // MLIT: every canvas made so far (the membrane lights and the strand layers), freed if the bake fails
+    for (let m = 0; m < MN; m += 1) {
+      const [Lx, Ly, lz, hx, hy, hz] = half(m, MN);
+      const c = document.createElement("canvas"); c.width = NW; c.height = NH; lit.push(c); MLIT.push(c);
+      const q = c.getContext("2d");
+      if (!q) throw new Error("no 2D context");
+      const img = q.createImageData(NW, NH), D = img.data;
+      for (let o = 0; o < NP; o += 1) {
+        if (!(o % 40000)) yield;
+        const nx = NX[o], ny = NY[o], nzv = NZ[o], s = Math.max(0, SD[o]);
+        const nl = SX[o] * Lx + SY[o] * Ly + SZ[o] * lz, nh = Math.max(0, nx * hx + ny * hy + nzv * hz);
+        const core = Math.max(clamp((s - 2) / 16, 0, 1), 0.7 * CP[o]), sss = 0.5 + 0.2 * core;            // light from inside, evenly
+        const dif = 0.24 * Math.max(0, nl) + 0.05 * Math.max(0, nl + 0.4);
+        const n2 = nh * nh, n4 = n2 * n2, n8 = n4 * n4, n16 = n8 * n8, n32 = n16 * n16, n64 = n32 * n32;
+        const spec = (2.8 * n64 * n32 + 0.04 * n32) * clamp(SD[o] / 3, 0, 1);           // hard thin wet glints, a faint sheen
+        const lum = dif + sss, sp = 255 * spec;
+        D[o * 4] = Math.min(255, A[o * 3] * lum + sp); D[o * 4 + 1] = Math.min(255, A[o * 3 + 1] * lum + sp); D[o * 4 + 2] = Math.min(255, A[o * 3 + 2] * lum + sp * 1.04); D[o * 4 + 3] = 255;
+      }
+      q.putImageData(img, 0, 0);
+    }
+
+    // ---- the strand mass, in two layers: the brow's (it moves with the brow) and the lower lid's with both corners
+    // (it stays). The white at rest (the shape under the resting brows) is the hole the fibres bite into.
+    let Wr = P; for (const [a, b] of [sty.brow, sty.brow2]) Wr = clipBelow(Wr, a, b);
+    const sdW = (x, y) => sdPoly(Wr, x, y);
+    let tip = Wr[0], inn = Wr[0]; for (const v of Wr) { if (v[0] > tip[0]) tip = v; if (v[0] < inn[0]) inn = v; }
+    const axL = Math.hypot(tip[0] - inn[0], tip[1] - inn[1]), ax = (tip[0] - inn[0]) / axL, ay = (tip[1] - inn[1]) / axL;
+    const along = (x, y) => ((x - inn[0]) * ax + (y - inn[1]) * ay) / axL, above = (x, y) => (x - inn[0]) * ay - (y - inn[1]) * ax;
+    const capsF = sty.drips.map(([x, y, len, , wd]) => [x, y - 2, x, y + len, wd * 0.5]);
+    const sdDrip = (x, y) => { let sd = -1e9; for (const [ax0, ay0, bx, by, r] of capsF) { const ey = by - ay0, f = clamp((y - ay0) / ey, 0, 1); sd = Math.max(sd, r - Math.hypot(x - ax0 - (bx - ax0) * f, y - ay0 - ey * f)); } return sd; };
+    const FS = 3.1, LY = [{ x0: -26, y0: -76, w: 214, h: 110 }, { x0: -26, y0: -52, w: 214, h: 122 }];
+    for (const L of LY) {
+      L.NW = Math.round(L.w * FS); L.NH = Math.round(L.h * FS); L.NP = L.NW * L.NH;
+      L.H = new Float32Array(L.NP);
+      L.BR = new Float32Array(L.NP); L.CV = new Float32Array(L.NP);
+    }
+    yield;
+    // the flow: along the rim (the white's outline), oriented from the inner corner to the outer tip; past either tip it
+    // fans out from it; away from the rim it wanders
+    const flow = (x, y, bias, sd) => {
+      const e = 0.6, gx = sdW(x + e, y) - sdW(x - e, y), gy = sdW(x, y + e) - sdW(x, y - e), gl = Math.hypot(gx, gy) || 1;
+      let tx = -gy / gl, ty = gx / gl;
+      if (tx * ax + ty * ay < 0) { tx = -tx; ty = -ty; }
+      const s = along(x, y), fo = sstep(0.9, 1.06, s), fi = sstep(0.1, -0.04, s);
+      if (fo > 0) { const rx = x - tip[0] + 10 * ax, ry = y - tip[1] + 10 * ay, rl = Math.hypot(rx, ry) || 1; tx = lerp(tx, rx / rl, fo); ty = lerp(ty, ry / rl, fo); }
+      if (fi > 0) { const rx = -(x - inn[0] - 10 * ax), ry = -(y - inn[1] - 10 * ay), rl = Math.hypot(rx, ry) || 1; tx = lerp(tx, rx / rl, fi); ty = lerp(ty, ry / rl, fi); }
+      const an = bias + 0.3 * clamp(-sd / 18, 0, 1) * nz(x * 0.045 + 71, y * 0.045 + 13), c = Math.cos(an), sn = Math.sin(an), l = Math.hypot(tx, ty) || 1;
+      return [(tx * c - ty * sn) / l, (tx * sn + ty * c) / l];
+    };
+    // stamp one segment of a fibre (radius r0 to r1, face units) into layer L as a round ridge on top of what is there
+    const stamp = (L, xa, ya, xb, yb, r0, r1, hb, br) => {
+      const ex = xb - xa, ey = yb - ya, el = ex * ex + ey * ey || 1e-6, rm = Math.max(r0, r1) + 0.5 / FS, pr = 1.3 / FS;
+      const i0 = Math.max(0, Math.floor((Math.min(xa, xb) - rm - L.x0) * FS)), i1 = Math.min(L.NW - 1, Math.ceil((Math.max(xa, xb) + rm - L.x0) * FS));
+      const j0 = Math.max(0, Math.floor((Math.min(ya, yb) - rm - L.y0) * FS)), j1 = Math.min(L.NH - 1, Math.ceil((Math.max(ya, yb) + rm - L.y0) * FS));
+      for (let j = j0; j <= j1; j += 1) for (let i = i0; i <= i1; i += 1) {
+        const X = L.x0 + (i + 0.5) / FS, Y = L.y0 + (j + 0.5) / FS, f = clamp(((X - xa) * ex + (Y - ya) * ey) / el, 0, 1);
+        const dx = X - xa - ex * f, dy = Y - ya - ey * f, d = Math.hypot(dx, dy), r = r0 + (r1 - r0) * f;
+        if (d > r + 0.5 / FS) continue;
+        const o = j * L.NW + i, cov = clamp((r - d) * FS + 0.5, 0, 1);
+        L.CV[o] = 1 - (1 - L.CV[o]) * (1 - cov);
+        const q = Math.min(1, d / Math.max(r, pr)), hh = hb + Math.max(r, pr) * Math.sqrt(1 - q * q) * 1.2;
+        if (hh > L.H[o]) { L.H[o] = hh; L.BR[o] = br; }
+      }
+    };
+    // the rim samples with their outward normals
+    const PER = [];
+    for (let j = 0; j < Wr.length; j += 1) {
+      const a = Wr[j], b = Wr[(j + 1) % Wr.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      for (let f = 0; f < len; f += 1) { const x = a[0] + (b[0] - a[0]) * f / len, y = a[1] + (b[1] - a[1]) * f / len, gx = sdW(x + 0.5, y) - sdW(x - 0.5, y), gy = sdW(x, y + 0.5) - sdW(x, y - 0.5), gl = Math.hypot(gx, gy) || 1; PER.push([x, y, -gx / gl, -gy / gl]); }
+    }
+    // a rope: traced both ways from its seed along the flow plus its own family angle and a slow curvature wander,
+    // tapered at both ends (a tongue: from its root outside the rim, bending into the white, tapering to a point)
+    const fibre = (id, x, y, len, wd, bias, Lr, tongue) => {
+      const hb = 0.6 * hash(id * 3.7 + 0.2), st = 0.45, pts = [[x, y]], cw = 0.14 + 0.18 * hash(id * 1.9 + 0.4);
+      const bend = (m) => bias + cw * nz(m * st * 0.06 + id * 1.37, id * 0.71 + 3.3);
+      if (tongue) {
+        let px = x, py = y;
+        for (let m = 0; m * st < len; m += 1) {
+          const sd = sdW(px, py), [tx, ty] = flow(px, py, bend(m) * 0.5, sd), gx = sdW(px + 0.5, py) - sdW(px - 0.5, py), gy = sdW(px, py + 0.5) - sdW(px, py - 0.5), gl = Math.hypot(gx, gy) || 1;
+          const f = clamp(m * st / len * 1.4, 0, 0.8), dx = lerp(tx * tongue, gx / gl, f), dy = lerp(ty * tongue, gy / gl, f), l = Math.hypot(dx, dy) || 1;
+          px += dx / l * st; py += dy / l * st; pts.push([px, py]);
+        }
+      } else {
+        for (const dir of [1, -1]) {
+          let px = x, py = y; const half = [];
+          for (let m = 0; m * st < len / 2; m += 1) { const [tx, ty] = flow(px, py, bend(m * dir), sdW(px, py)); px += dir * tx * st; py += dir * ty * st; half.push([px, py]); }
+          if (dir > 0) pts.push(...half); else pts.unshift(...half.reverse());
+        }
+      }
+      const n = pts.length - 1;
+      for (let m = 0; m < n; m += 1) {
+        const u0 = m / n, u1 = (m + 1) / n;
+        const rw = (u) => 0.5 * wd * (tongue ? Math.pow(1 - u, 0.7) : Math.pow(Math.sin(Math.PI * clamp(u, 0.02, 0.98)), 0.6));
+        const br = wd > 1.4 ? 0.75 + 0.25 * sstep(-0.3, 0.3, nz(m * st * 0.06 + id * 7.7, id * 3.1)) : sstep(-0.1, 0.45, nz(m * st * 0.11 + id * 7.7, id * 3.1 + 0.5));
+        stamp(Lr, pts[m][0], pts[m][1], pts[m + 1][0], pts[m + 1][1], rw(u0), rw(u1), hb, br);
+      }
+    };
+    // 50 fat ropes in bundles (few clumps: they merge and split), 150 thin ones between, in three flow families that
+    // cross at 10 to 30 degrees; a few ropes leave the mass and run off across the socket; more crossing at the tips
+    const FAM = [-0.3, 0, 0.24], NCL = 16, clumps = []; for (let c = 0; c < NCL; c += 1) clumps.push(hash(c * 3.31 + 0.71));
+    for (let f = 0; f < 200; f += 1) {
+      if (!(f % 8)) yield;
+      const hf = (k) => hash(f * 5.77 + k * 2.31 + 0.9), fat = f < 50;
+      const s = (((clumps[Math.floor(hf(1) * NCL)] + (hf(2) - 0.5) * (fat ? 0.05 : 0.2)) % 1) + 1) % 1, [rx, ry, nx, ny] = PER[Math.floor(s * PER.length)];
+      const r = hf(3), o = 0.6 + (fat ? 12 : 20) * r * r + 1.5 * hf(4), x = rx + nx * o, y = ry + ny * o;
+      const wd = fat ? 1.8 + 2.6 * hf(5) : 0.4 + 0.5 * hf(5);
+      const sA = along(x, y), cIn = sstep(0.22, 0, sA), cOut = sstep(0.8, 0.96, sA), corner = Math.max(cIn, cOut);
+      const len = (fat ? 50 + 70 * hf(6) : 30 + 50 * hf(6)) * (0.8 + 0.4 * corner);
+      const stray = hf(9) < 0.07, bias = FAM[Math.floor(hf(7) * 3)] * (0.5 + 0.6 * hf(8)) * (1 + 0.6 * corner) + (stray ? (hf(10) < 0.5 ? -0.6 : 0.6) : 0);
+      if (!fat && corner > 0.3) continue;   // no fine hair fanning at the tips
+      fibre(f, x, y, len, wd, bias, LY[cIn > 0.5 || above(x, y) < 0 ? 1 : 0], 0);
+    }
+    // 5 fat ropes that sweep past each tip
+    for (let t3 = 0; t3 < 10; t3 += 1) {
+      const hf = (k) => hash(t3 * 7.13 + k * 2.71 + 8.4), outer = t3 >= 5, [px, py] = outer ? tip : inn;
+      const x = px - (outer ? 1 : -1) * (14 + 20 * hf(1)) * ax + (hf(2) - 0.5) * 9 * -ay, y = py - (outer ? 1 : -1) * (14 + 20 * hf(1)) * ay + (hf(2) - 0.5) * 9 * ax;
+      fibre(2000 + t3, x, y, 50 + 40 * hf(3), 2.2 + 1.6 * hf(4), (hf(5) - 0.5) * 0.35, LY[outer && above(x, y) > 0 ? 0 : 1], 0);
+    }
+    // the lower-outer stretch of rim (from the belly up to the outer tip): ropes lying over it, so it is ragged too
+    for (let t4 = 0; t4 < 9; t4 += 1) {
+      const hf = (k) => hash(t4 * 5.31 + k * 3.17 + 2.6), f = 0.1 + 0.8 * hf(1), x0r = lerp(100, tip[0] - 4, f), y0r = lerp(24, tip[1] + 6, f);
+      const gx = sdW(x0r + 0.5, y0r) - sdW(x0r - 0.5, y0r), gy = sdW(x0r, y0r + 0.5) - sdW(x0r, y0r - 0.5), gl = Math.hypot(gx, gy) || 1, o = -0.4 + 3 * hf(2);
+      fibre(3000 + t4, x0r - gx / gl * o, y0r - gy / gl * o, 14 + 22 * hf(3), t4 < 4 ? 1.8 + 1.4 * hf(4) : 0.5 + 0.5 * hf(4), (hf(5) - 0.5) * 0.25, LY[1], 0);
+    }
+    // the tongues: 11 glossy black strands from outside the rim that bite into the white: 7 over the brow, 2 at each corner
+    for (let t2 = 0; t2 < 11; t2 += 1) {
+      const hf = (k) => hash(t2 * 9.13 + k * 1.77 + 4.2), kind = t2 < 7 ? 0 : t2 < 9 ? 1 : 2;
+      let best = null;
+      for (let m = 0; m < 80 && !best; m += 1) {
+        const c = PER[Math.floor(hash(t2 * 3.3 + m * 0.71) * PER.length)], sA = along(c[0], c[1]), up = above(c[0], c[1]) > 0;
+        if (kind === 0 ? up && sA > 0.15 && sA < 0.85 : kind === 1 ? sA < 0.16 : sA > 0.84) best = c;
+      }
+      if (!best) continue;
+      const [rx, ry, nx, ny] = best;
+      fibre(1000 + t2, rx + nx * 3, ry + ny * 3, 8 + 16 * hf(1), 2.2 + 1.6 * hf(2), (hf(3) - 0.5) * 0.4, LY[kind === 1 ? 1 : 0], kind === 1 ? 1 : kind === 2 ? -1 : hf(4) < 0.5 ? 1 : -1);
+    }
+    yield;
+    // each layer: one continuous wet skin (the ropes' relief with its valleys filled: a smooth max with a blurred copy),
+    // over a black socket (fading out at about 1.4 x the eye), a ragged black edge over the white, the ropes' soft shadow
+    // on the white; lit from FN directions: black, hard near-white lines along the ropes, a broad dim bluish fill
+    const box = (S0, D0, W2, H2, R) => {   // a separable box blur, S0 -> D0
+      const T = new Float32Array(W2 * H2);
+      for (let j = 0; j < H2; j += 1) { let acc = 0; for (let i = -R; i < W2 + R; i += 1) { if (i + R < W2) acc += S0[j * W2 + i + R]; if (i - R - 1 >= 0) acc -= S0[j * W2 + i - R - 1]; if (i >= 0 && i < W2) T[j * W2 + i] = acc / (2 * R + 1); } }
+      for (let i = 0; i < W2; i += 1) { let acc = 0; for (let j = -R; j < H2 + R; j += 1) { if (j + R < H2) acc += T[(j + R) * W2 + i]; if (j - R - 1 >= 0) acc -= T[(j - R - 1) * W2 + i]; if (j >= 0 && j < H2) D0[j * W2 + i] = acc / (2 * R + 1); } }
+    };
+    for (const [li, L] of LY.entries()) {
+      const { NW: W2, NH: H2, NP: P2 } = L, AL = new Float32Array(P2), SH = new Float32Array(P2), BL = new Float32Array(P2), HF = new Float32Array(P2), EF = new Float32Array(P2);
+      box(L.CV, BL, W2, H2, 5); const dyS = Math.round(1.2 * FS);
+      for (let j = H2 - 1; j >= 0; j -= 1) for (let i = 0; i < W2; i += 1) SH[j * W2 + i] = j - dyS >= 0 ? BL[(j - dyS) * W2 + i] : 0;
+      yield;
+      // the skin: the relief plus a gentle wet swell, valleys filled by a smooth max with its blurred copy (twice)
+      for (let o = 0; o < P2; o += 1) { const X = L.x0 + (o % W2 + 0.5) / FS, Y = L.y0 + (Math.floor(o / W2) + 0.5) / FS; L.H[o] += 0.5 * nz(X * 0.07 + 3, Y * 0.07 + 8); }
+      for (let pass = 0; pass < 2; pass += 1) {
+        box(L.H, BL, W2, H2, pass ? 3 : 6); yield;
+        for (let o = 0; o < P2; o += 1) { const a = L.H[o], b = BL[o] * 0.97, d = a - b; L.H[o] = 0.5 * (a + b + Math.sqrt(d * d + 0.25)); }
+      }
+      yield;
+      for (let j = 0; j < H2; j += 1) {
+        if (!(j % 24)) yield;
+        for (let i = 0; i < W2; i += 1) {
+          const o = j * W2 + i, X = L.x0 + (i + 0.5) / FS, Y = L.y0 + (j + 0.5) / FS, sd = sdW(X, Y), ab = above(X, Y);
+          const sA = along(X, Y), cIn = sstep(0.2, 0.04, sA), cOut = sstep(0.84, 0.98, sA);
+          const side = li ? Math.max(sstep(4, -4, ab), cIn) : Math.max(sstep(-4, 4, ab), cOut * sstep(-14, -4, ab)) * (1 - cIn);
+          const edgeF = sstep(3, 18, Math.min(X - L.x0, L.x0 + L.w - X, Y - L.y0, L.y0 + L.h - Y) + 6 * nz(X * 0.09 + 17, Y * 0.09 + 29)); EF[o] = edgeF;
+          const nzs = nz(X * 0.07 + 5.5, Y * 0.07 + 1.5), eo = 0.5 + 2.6 * clamp(nz(X * 0.16 + 9, Y * 0.16 + 2) * 1.3 + 0.35, 0, 1);
+          const base = sd < 0 ? sstep(-34, -12, sd + 7 * nzs) : 1 - sstep(eo - 0.4, eo + 0.4, sd);
+          const drip = li ? 1 - sstep(-1.5, 1.5, sdDrip(X, Y)) : 1, fade = sstep(-30, -13, sd + 8 * nzs);
+          const cv = L.CV[o] * fade, cov = 1 - (1 - base) * (1 - cv);
+          const shw = sd > 0 ? Math.max(0.7 * SH[o], 0.55 * Math.exp(-Math.max(0, sd - eo) / 2.2)) : 0;
+          AL[o] = Math.max(cov, shw) * side * edgeF * drip; SH[o] = cov / (Math.max(cov, shw) || 1); L.CV[o] = cv;
+          HF[o] = sd > 0 ? L.H[o] * Math.min(1, cv * 1.5) + 1.2 * (1 - sstep(eo - 0.6, eo + 0.6, sd)) : L.H[o] * Math.max(fade, cv);   // the lip rounds over onto the white
+        }
+      }
+      // normals of the skin
+      const NXs = new Float32Array(P2), NYs = new Float32Array(P2), NZs = new Float32Array(P2);
+      for (let j = 0; j < H2; j += 1) for (let i = 0; i < W2; i += 1) {
+        const o = j * W2 + i, l = HF[j * W2 + Math.max(0, i - 1)], r = HF[j * W2 + Math.min(W2 - 1, i + 1)], u0 = HF[Math.max(0, j - 1) * W2 + i], d0 = HF[Math.min(H2 - 1, j + 1) * W2 + i];
+        const dx = (r - l) * FS / 2, dy = (d0 - u0) * FS / 2, k = 1 / Math.hypot(dx, dy, 1);
+        NXs[o] = -dx * k; NYs[o] = -dy * k; NZs[o] = k;
+      }
+      yield;
+      L.lit = [];
+      for (let m = 0; m < FN; m += 1) {
+        const [, , , hx, hy, hz] = half(m, FN);
+        const c = document.createElement("canvas"); c.width = W2; c.height = H2; MLIT.push(c);
+        const q = c.getContext("2d");
+        if (!q) throw new Error("no 2D context");
+        const img = q.createImageData(W2, H2), D = img.data;
+        for (let o = 0; o < P2; o += 1) {
+          if (!(o % 40000)) yield;
+          const a = AL[o]; if (a < 0.004) continue;
+          const nh = Math.max(0, NXs[o] * hx + NYs[o] * hy + NZs[o] * hz), n2 = nh * nh, n4 = n2 * n2, n8 = n4 * n4, n16 = n8 * n8, n32 = n16 * n16, n64 = n32 * n32;
+          const hot = 255 * 5 * n64 * n32 * (0.35 + 0.65 * L.BR[o]) + 255 * 0.55 * n32 * L.BR[o], fill = 0.08 * n16;   // hard near-white lines; a broad dim fill
+          const wI = SH[o], ef = EF[o] * EF[o];   // ink where it is strand, a cold dark shadow where it is only shade; no light near the bounds
+          D[o * 4] = Math.min(255, lerp(10, 3, wI) + (110 * fill + hot * 0.94) * ef); D[o * 4 + 1] = Math.min(255, lerp(16, 4, wI) + (120 * fill + hot * 0.97) * ef); D[o * 4 + 2] = Math.min(255, lerp(34, 7, wI) + (175 * fill + hot) * ef); D[o * 4 + 3] = 255 * a;
+        }
+        q.putImageData(img, 0, 0); L.lit.push(c);
+      }
+      for (const k of ["H", "BR", "CV"]) L[k] = null;
+    }
+    MEMB = { lit, x0, y0, w, h, fib: LY.map(({ lit: l, x0: a, y0: b, w: c, h: d }) => ({ lit: l, x0: a, y0: b, w: c, h: d })) }; MLIT = null;
+  }
+  /** The part of polygon P on or below the line through a and b (face units, y down). */
+  function clipBelow(P, a, b) {
+    const f = (p) => p[1] - (a[1] + (p[0] - a[0]) * (b[1] - a[1]) / (b[0] - a[0])), out = [];
+    P.forEach((p, j) => {
+      const q = P[(j + 1) % P.length], fp = f(p), fq = f(q);
+      if (fp >= 0) out.push(p);
+      if ((fp >= 0) !== (fq >= 0)) { const s = fp / (fp - fq); out.push([p[0] + (q[0] - p[0]) * s, p[1] + (q[1] - p[1]) * s]); }
+    });
+    return out;
+  }
+  /** A drawn eye now (``i`` 0: left, 1: right; ``k`` how open; ``e`` its state): the white W, the brow lines B, the
+   *  liquid brow's path R (all px) and toPx (face units of the right-eye frame to px). */
+  function eyeGeo(S, i, k, e) {
+    const sty = styleOf(), side = i ? 1 : -1, [ady, asc] = i ? [0, 1] : sty.asym;
+    const lx = clamp(e ? e.lx : 0, -1, 1), ly = clamp(e ? e.ly : 0.5, -1, 1);
+    const d = Math.max(0, 1 - k), up = Math.max(0, k - 1), tw = (e && e.tw) || 0;
+    // the brow: below 1 it drops along its whole length (the inner end a little more); above 1 the outer end lifts
+    // (the shape is drawn taller than it shows, so the flare is not cut off by its own top); a twitch dips the inner end
+    const mv = ([x, y]) => { const w = clamp(x / 120, 0, 1); return [x, y + ady * (1 - w) + d * 50 * (1 - 0.25 * w) + tw * 8 * (1 - 0.5 * w) - up * 46 * w]; };
+    const B = [sty.brow, sty.brow2].filter(Boolean).map(([a, b]) => [mv(a), mv(b)]);
+    let W = sty.shape;
+    for (const [a, b] of B) W = clipBelow(W, a, b);
+    const es = 1.06;   // a little larger than drawn: the thin lip and the strands eat into the rim (full size on a phone too: the face sits lower)
+    const toPx = ([x, y]) => {
+      const o = clamp((x - 10) / 110, 0, 1), X = es * (side * x * asc + lx * (2 + 5 * o)), Y = es * (y * asc + ly * (1.5 + 2.5 * o) + (i ? 0 : 1.5) - 12) + 12, w = leanW(Y);
+      return [S.x + X * S.u + S.lx * w, S.y + Y * S.u + S.ly * w];
+    };
+    // the liquid brow: from over the nose (the two meet in a V) along the brow, then up into a spire's root
+    const yAt = (x) => { let y = -1e9; for (const [a, b] of B) y = Math.max(y, a[1] + (x - a[0]) * (b[1] - a[1]) / (b[0] - a[0])); return y; };
+    const x1 = B[B.length - 1][1][0] + 4, RB = [];
+    for (let j = 0; j <= 8; j += 1) { const x = -6 + (x1 + 6) * j / 8; RB.push([x, yAt(x) - 4.5 - 1.5 * j / 8]); }
+    for (const p of sty.root) RB.push(p);
+    return { W: W.map(toPx), Wf: W, B: B.map((l) => l.map(toPx)), Bf: B, R: RB.map(toPx), toPx, asc, yAt, side, lx, ly };
+  }
+  // the live strands round the eye (the mass itself is baked): 6 thin black strands that creep, [guide (0 along the
+  // brow, 1 along the lower edge; both run on past the tips), from, to (0..1 along it), offset out from the rim at its
+  // start and end (face units; negative = into the white), arc, root width, phase, tongue (laps over the rim and tapers
+  // to a point in the white), root at the far end]
+  const STRANDS = [
+    [0, 0.18, 0.31, 3, -7, -1.2, 2.2, 0.7, 1, false], [0, 0.46, 0.57, 3, -9, 1.4, 2.6, 2.9, 1, false],
+    [0, 0.7, 0.8, 3, -6, -1, 1.8, 4.4, 1, false], [1, 0.42, 0.52, 3, -5, 1, 1.6, 1.9, 1, false],
+    [0, 0.05, 0.6, 1.5, 0.6, -2.5, 1.1, 3.3, 0, false], [0, 0.6, 1.06, 0.8, 4, 2, 1.2, 5.2, 0, true],
+  ];
+  const LOWER = [[12, 3], [18, 5.5], [40, 19], [66, 28.5], [86, 31], [100, 26], [111, 13]];
+  /** One drawn eye on the face canvas: the baked membrane lit from what it watches (two nearest lights blended, the
+   *  light breathing a little so the glints slide), a wet shade under the brow, glossy milky drips; the rim is the oil:
+   *  a ragged wet lip and glossy tongues that creep in and pull back (more while he speaks and when he is loud), glossy
+   *  strands across the corners and off the tips. No pupil. ``glow`` 0..~2. */
+  function styleEye(g, S, i, k, e, glow, t) {
+    const sty = styleOf(), u = S.u, { W, Wf, B, toPx, asc, yAt, side, lx, ly } = eyeGeo(S, i, k, e);
+    if (W.length < 3) return;
+    const U = u * asc * 1.12;   // one face unit of this eye in px
+    const act = V.still ? 0 : MIC.state === "recording" ? 1.6 + 2.2 * V.lvl : V.view === "working" ? 1.3 : 1, T = t * act;
+    let cx = 0, cy = 0; W.forEach(([x, y]) => { cx += x / W.length; cy += y / W.length; });
+    // a faint cold light round it (a light in a hole, not a lamp); more when he is loud
+    g.globalCompositeOperation = "lighter";
+    const R0 = 72 * u, gr = g.createRadialGradient(cx, cy, 0, cx, cy, R0);
+    gr.addColorStop(0, `rgba(205,220,240,${(0.1 * glow).toFixed(3)})`); gr.addColorStop(0.5, `rgba(205,220,240,${(0.03 * glow).toFixed(3)})`); gr.addColorStop(1, "rgba(205,220,240,0)");
+    g.fillStyle = gr; g.fillRect(cx - R0, cy - R0, 2 * R0, 2 * R0);
+    g.globalCompositeOperation = "source-over";
+    g.lineJoin = "round"; g.lineCap = "round";
+    // the eye and its drips as one path (no seam where a drip leaves the eye)
+    const drips = (sty.drips || []).map(([x, y, len, ph, wd]) => {
+      const L = len * (0.8 + 0.2 * Math.sin(t * 0.5 + ph)) * Math.min(1, k), sw = 1.2 * Math.sin(t * 0.7 + ph), r = wd * 0.62;
+      return { a: toPx([x - wd, y - 6]), b: toPx([x + wd, y - 6]), n0: toPx([x - wd * 0.1 + sw * 0.4, y + L * 0.62]), n1: toPx([x + wd * 0.1 + sw * 0.4, y + L * 0.62]), tip: toPx([x + sw, y + L]), R: r * U };
+    });
+    const outline = () => {
+      g.beginPath(); W.forEach(([x, y], j) => (j ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath();
+      for (const d of drips) dripPath(d);
+    };
+    function dripPath({ a, b, n0, n1, tip, R }) {
+      g.moveTo(a[0], a[1]); g.quadraticCurveTo(n0[0] + R * 0.2, n0[1] - R * 2, n0[0], n0[1]);
+      g.quadraticCurveTo(tip[0] - R * 1.3, tip[1] - R * 0.2, tip[0] - R * 0.2, tip[1] + R);
+      g.quadraticCurveTo(tip[0] + R * 1.3, tip[1] + R * 0.6, n1[0], n1[1]);
+      g.quadraticCurveTo(n1[0] - R * 0.2, n1[1] - R * 2, b[0], b[1]); g.closePath();
+    }
+    // the socket under it all: soft black, so a dropped brow or a lifted tip opens onto black, never the creature
+    const MB = membraneTex(), [ox, oy] = toPx([0, 0]), [ax, ay] = toPx([1, 0]), [bx2, by2] = toPx([0, 1]);
+    if (MB) {
+      g.save(); g.transform(ax - ox, ay - oy, bx2 - ox, by2 - oy, ox, oy); g.translate(80, -6); g.scale(1, 0.5);
+      const ug = g.createRadialGradient(0, 0, 0, 0, 0, 96); ug.addColorStop(0, "rgba(3,4,7,1)"); ug.addColorStop(0.6, "rgba(3,4,7,0.95)"); ug.addColorStop(0.82, "rgba(3,4,7,0.5)"); ug.addColorStop(1, "rgba(3,4,7,0)");
+      g.fillStyle = ug; g.beginPath(); g.arc(0, 0, 96, 0, TAU); g.fill(); g.restore();
+    }
+    g.save(); outline(); g.clip();
+    // the membrane: the light comes from what it watches (in this eye's frame), mostly from above, and breathes
+    const Lang = Math.atan2(-0.75 + 0.35 * ly, lx * side * 0.9 - 0.25) + 0.07 * Math.sin(T * 0.9) + 0.04 * Math.sin(T * 2.3 + i);
+    if (MB) {
+      const f = clamp((Lang - MA0) / (MA1 - MA0), 0, 1) * (MN - 1), m0 = Math.floor(f), fr = f - m0, dx = 0.35 * Math.sin(T * 0.4 + i), dy = 0.25 * Math.sin(T * 0.31 + 1);
+      g.save(); g.transform(ax - ox, ay - oy, bx2 - ox, by2 - oy, ox, oy);
+      g.imageSmoothingQuality = "high";
+      g.drawImage(MB.lit[m0], MB.x0 + dx, MB.y0 + dy, MB.w, MB.h);
+      if (fr > 0.02 && m0 + 1 < MN) { g.globalAlpha = fr; g.drawImage(MB.lit[m0 + 1], MB.x0 + dx, MB.y0 + dy, MB.w, MB.h); g.globalAlpha = 1; }
+      g.restore();
+    } else { const [qx, qy] = toPx([64, 12]), pg = g.createRadialGradient(qx, qy, 0, qx, qy, 64 * U); pg.addColorStop(0, "#f2f4f6"); pg.addColorStop(0.6, "#b9c2cd"); pg.addColorStop(1, "#303a4a"); g.fillStyle = pg; g.fill(); }
+    // louder: the core burns brighter
+    if (glow > 1.02) {
+      const [qx, qy] = toPx([64, 14]), qg = g.createRadialGradient(qx, qy, 0, qx, qy, 50 * U);
+      qg.addColorStop(0, `rgba(200,218,255,${(0.14 * (glow - 1)).toFixed(3)})`); qg.addColorStop(1, "rgba(235,242,255,0)");
+      g.globalCompositeOperation = "lighter"; g.fillStyle = qg; g.fillRect(qx - 50 * U, qy - 50 * U, 100 * U, 100 * U); g.globalCompositeOperation = "source-over";
+    }
+    // the wet dark falloff under the brow (the brow moves, so this one is drawn now)
+    // (one polyline, its blurred shadow only: no seam at the brow's kink, no banding)
+    const BL = [B[0][0], ...B.map((l) => l[1])], OFF = 4000;
+    g.lineJoin = "round"; g.lineCap = "round"; g.strokeStyle = "#000"; g.lineWidth = 9 * U;
+    g.shadowColor = "rgba(14,20,36,0.95)"; g.shadowBlur = 9 * U; g.shadowOffsetX = OFF;
+    poly(g, BL.map(([x, y]) => [x - OFF, y])); g.stroke();
+    g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetX = 0;
+    // the drips: a dark core down the far side and a bright edge down the near one
+    for (const d of drips) {
+      const { a, n0, n1, tip, R } = d, dg = g.createLinearGradient(a[0], a[1], tip[0], tip[1] + R);
+      dg.addColorStop(0, "rgba(214,222,236,0)"); dg.addColorStop(0.2, "rgba(214,222,236,0)"); dg.addColorStop(0.45, "rgba(214,222,236,0.6)"); dg.addColorStop(1, "rgba(150,164,190,0.5)");
+      g.beginPath(); dripPath(d); g.fillStyle = dg; g.fill();
+      g.lineWidth = Math.max(0.8, R * 0.5);
+      g.strokeStyle = "rgba(20,28,44,0.45)"; g.beginPath(); g.moveTo(n1[0] - R * 0.15, n1[1]); g.quadraticCurveTo(tip[0] + R * 0.8, tip[1] - R * 0.4, tip[0] + R * 0.2, tip[1] + R * 0.6); g.stroke();
+      g.strokeStyle = "rgba(240,246,255,0.5)"; g.lineWidth = Math.max(0.6, R * 0.14);
+      g.beginPath(); g.moveTo(n0[0] + R * 0.25, n0[1] - R); g.quadraticCurveTo(tip[0] - R * 0.7, tip[1] - R * 0.6, tip[0] - R * 0.45, tip[1] + R * 0.1); g.stroke();
+    }
+    // the strands' shade on the white
+    const SG = strandGeo(Wf, yAt, toPx, U, T, k);
+    strandShade(g, SG, U);
+    g.restore();
+    // the strand mass (baked): the lower lid's stays, the brow's moves with the brow (the brow's move is a shear in
+    // this frame); then the live strands
+    if (MB) {
+      const ff = clamp((Lang - MA0) / (MA1 - MA0), 0, 1) * (FN - 1), f0 = Math.floor(ff), fr2 = ff - f0;
+      const ady = i ? 0 : sty.asym[0], dd = Math.max(0, 1 - k), up = Math.max(0, k - 1), tw = (e && e.tw) || 0;
+      const shA = ady + 50 * dd + 8 * tw, shB = (-ady - 12.5 * dd - 4 * tw - 46 * up) / 120;
+      g.save(); g.transform(ax - ox, ay - oy, bx2 - ox, by2 - oy, ox, oy); g.imageSmoothingQuality = "high";
+      for (const li of [1, 0]) {
+        const L = MB.fib[li];
+        if (!li) g.transform(1, shB, 0, 1, 0, shA);
+        g.drawImage(L.lit[f0], L.x0, L.y0, L.w, L.h);
+        if (fr2 > 0.02 && f0 + 1 < FN) { g.globalAlpha = fr2; g.drawImage(L.lit[f0 + 1], L.x0, L.y0, L.w, L.h); g.globalAlpha = 1; }
+      }
+      g.restore();
+    }
+    strands(g, SG, U, T, side, Lang);
+    g.lineCap = "butt"; g.lineJoin = "miter";
+  }
+  /** The strand mass round one eye, as geometry (px): STRANDS laid along two guides (the brow, the lower edge, both
+   *  running on past the tips), each a curved tapered tube (thick at its root, thin at its tip) that creeps and bows. */
+  function strandGeo(Wf, yAt, toPx, U, T, k) {
+    let tx = -1e9, ty = 0; for (const [x, y] of Wf) if (x > tx) { tx = x; ty = y; }
+    const ext = (P) => { P.push([tx + 7, ty - 6], [tx + 13, ty - 15], [tx + 16, ty - 27]); return P; };
+    const lowY = (x) => { for (let m = 1; m < LOWER.length; m += 1) { const [ax, ay] = LOWER[m - 1], [bx, by] = LOWER[m]; if (x <= bx) return ay + (by - ay) * clamp((x - ax) / (bx - ax), 0, 1); } return -1e9; };
+    const gB = []; for (let x = 10; x < tx - 3; x += 6) { const yl = lowY(x); gB.push([x, yl > -1e8 ? Math.min(yAt(x), yl) : yAt(x)]); }   // a dropped brow never takes its strands below the eye gB.push([tx, ty]); ext(gB);
+    const gL = LOWER.filter(([x]) => x < tx - 3).map((p) => p.slice()); gL.push([tx, ty]); ext(gL);
+    const guides = [gB, gL].map((P, gi) => {
+      const S = [0]; for (let m = 1; m < P.length; m += 1) S.push(S[m - 1] + Math.hypot(P[m][0] - P[m - 1][0], P[m][1] - P[m - 1][1]));
+      return { P, S, sg: gi ? 1 : -1 };
+    });
+    const at = (G, s) => {   // point and outward normal at arc length s
+      const { P, S, sg } = G; let m = 1; while (m < P.length - 1 && S[m] < s) m += 1;
+      const a = P[m - 1], b = P[m], L = S[m] - S[m - 1] || 1, f = (s - S[m - 1]) / L, dx = (b[0] - a[0]) / L, dy = (b[1] - a[1]) / L;
+      return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, -dy * sg, dx * sg];
+    };
+    const NS = 18, out = [];
+    STRANDS.forEach(([gi, a0, a1, o0, o1, bow, w, ph, tongue, rev]) => {
+      const G = guides[gi], tot = G.S[G.S.length - 1], cr = 0.015 * Math.sin(T * 0.21 + ph * 3);
+      const bite = tongue ? (0.7 + 0.3 * Math.sin(T * 0.45 + ph)) * clamp(k * 1.2, 0.5, 1.15) : 1;
+      // the guide is a polyline: sample it densely, then smooth (no kinks in a strand)
+      let Q = [];
+      for (let m = 0; m <= NS; m += 1) {
+        const f = m / NS, [x, y, nx, ny] = at(G, (a0 + cr + (a1 - a0) * f) * tot);
+        const o = tongue ? lerp(o0, o1 * bite, Math.pow(f, 1.4)) + bow * Math.sin(Math.PI * f)
+          : lerp(o0, o1, f * f * (3 - 2 * f)) + bow * Math.sin(Math.PI * f) + 0.8 * Math.sin(f * (2.5 + ph) + ph + T * 0.35);
+        const oc = tongue ? o : Math.max(o, 0.4 * w + 0.4);   // a strand lies on the rim or outside it; only tongues lap in
+        Q.push([x + nx * oc, y + ny * oc]);
+      }
+      for (let r = 0; r < 2; r += 1) Q = Q.map((p, m) => (m && m < NS ? [(Q[m - 1][0] + 2 * p[0] + Q[m + 1][0]) / 4, (Q[m - 1][1] + 2 * p[1] + Q[m + 1][1]) / 4] : p));
+      const P = Q.map(toPx), Wd = [];
+      for (let m = 0; m <= NS; m += 1) {
+        const f = rev ? 1 - m / NS : m / NS;   // f 0 at the root
+        Wd.push(Math.max(0.5, w * U * (tongue ? 0.06 + 0.94 * Math.pow(1 - f, 0.9) : (0.1 + 0.9 * Math.pow(1 - f, 0.75)) * Math.min(1, 0.55 + f * 7))));
+      }
+      out.push({ P, Wd, N: normals(P, false), ph, tongue });
+    });
+    return out;
+  }
+  /** The outline of a strand's body (smooth: quadratic through the midpoints of both edges). */
+  function strandPath(g, P, N, Wd, f = 1) {
+    const n = P.length, Lf = [], Rt = [];
+    for (let m = 0; m < n; m += 1) { const h = Wd[m] * f / 2; Lf.push([P[m][0] + N[m][0] * h, P[m][1] + N[m][1] * h]); Rt.push([P[m][0] - N[m][0] * h, P[m][1] - N[m][1] * h]); }
+    const edge = (E) => { for (let m = 1; m < n - 1; m += 1) g.quadraticCurveTo(E[m][0], E[m][1], (E[m][0] + E[m + 1][0]) / 2, (E[m][1] + E[m + 1][1]) / 2); g.lineTo(E[n - 1][0], E[n - 1][1]); };
+    g.moveTo(Lf[0][0], Lf[0][1]); g.lineTo((Lf[0][0] + Lf[1][0]) / 2, (Lf[0][1] + Lf[1][1]) / 2); edge(Lf);
+    Rt.reverse(); g.lineTo(Rt[0][0], Rt[0][1]); g.lineTo((Rt[0][0] + Rt[1][0]) / 2, (Rt[0][1] + Rt[1][1]) / 2); edge(Rt); g.closePath();
+  }
+  /** The strands' soft shadow on the white (inside the eye's clip): bluish-dark pools under them, deeper under the tongues. */
+  function strandShade(g, SG, U) {
+    const OFF = 4000;
+    g.save(); g.translate(-OFF, 0); g.beginPath();
+    for (const { P, N, Wd, tongue } of SG) if (tongue || Wd[0] + Wd[Wd.length - 1] > 5 * U) strandPath(g, P, N, Wd, 1.25);   // the tongues and the fat ones
+    g.shadowColor = "rgba(8,14,30,0.8)"; g.shadowBlur = 3.5 * U; g.shadowOffsetX = OFF + 0.6 * U; g.shadowOffsetY = 1.4 * U;
+    g.fillStyle = "#000"; g.fill(); g.restore();
+  }
+  /** The live strands drawn like the baked ones: black, no body light, only a hair-thin broken streak where the eye's
+   *  light catches the lit side (it slides as they creep). */
+  function strands(g, SG, U, T, side, Lang) {
+    const lx = side * Math.cos(Lang), ly = Math.sin(Lang);
+    g.lineCap = "round"; g.lineJoin = "round";
+    for (const { P, N, Wd, ph } of SG) {
+      const n = P.length;
+      g.beginPath(); strandPath(g, P, N, Wd); g.fillStyle = INK; g.fill();
+      g.beginPath(); let on = false;
+      for (let m = 0; m < n - 1; m += 1) {
+        const fc = N[m][0] * lx + N[m][1] * ly, s = m / (n - 1), gl = 0.5 + 0.5 * Math.sin(s * (3.1 + 0.7 * ph) + ph * 2.1 - T * 0.45);
+        if (gl * Math.abs(fc) < 0.33 || Wd[m] < 0.8) { on = false; continue; }
+        const o = Wd[m] * 0.32 * Math.sign(fc), o1 = Wd[m + 1] * 0.32 * Math.sign(fc);
+        if (!on) g.moveTo(P[m][0] + N[m][0] * o, P[m][1] + N[m][1] * o);
+        g.lineTo(P[m + 1][0] + N[m + 1][0] * o1, P[m + 1][1] + N[m + 1][1] * o1); on = true;
+      }
+      g.strokeStyle = "rgba(232,240,255,0.8)"; g.lineWidth = Math.max(0.6, 0.35 * U); g.stroke();
+    }
+  }
   /** One orb, sharp: sunk wet glass with limb darkening, a pinprick pupil that tracks and dilates, a hard specular,
    *  and a dark membrane that slides sideways over it (``k``: 1 open, 0 covered; it comes from the outer side). */
   function orb(g, cx, cy, r, e, k, glow, pupil, side, t, droop, film = 0.97) {
@@ -1216,7 +1773,7 @@ void main() {
     const S = F.S, u = S.u, A = F.pres * (1 - 0.25 * F.sink), m = F.maw;
     const at = (x, y) => { const w = leanW(y); return [S.x + x * u + S.lx * w, S.y + y * u + S.ly * w]; };
     const sh = (x, y) => (y <= MAW.y0 ? at(x, y) : at(x + Math.sign(x || 1) * mawHW(clamp((y - MAW.y0) / (MAW.y1 - MAW.y0), 0, 1)) * m, y));
-    const orbs = orbsOn();
+    const sty = styleOf(), orbs = !sty && orbsOn();
     // darkness behind it: it comes out of the smoke
     pen.dark(S.x, S.y + 30 * u, 215 * u, 200 * u, 0.92);
     pen.dark(S.x, S.y - 70 * u, 170 * u, 120 * u, 0.7);
@@ -1251,13 +1808,14 @@ void main() {
     };
     for (const d of [1, -1]) {
       // the brow: heavy, low over the top eyes, down into the temple
-      rope([[d * 4, -13], [d * 30, -19], [d * 72, -24], [d * 104, -10], [d * 117, 18]], 15, 10, 2 + d);
+      if (!sty) rope([[d * 4, -13], [d * 30, -19], [d * 72, -24], [d * 104, -10], [d * 117, 18]], 15, 10, 2 + d);
+      else rope([[d * 98, -34], [d * 110, -8], [d * 117, 18]], 10, 9, 2 + d);   // only the temple: the eyes carry their own brows
       // fanning up from the brow into the roots of the spires
       rope([[d * 10, -16], [d * 20, -44], [d * 28, -66]], 9, 12, 10 + d);
       rope([[d * 30, -20], [d * 46, -42], [d * 60, -56]], 8, 12, 11 + d);
       rope([[d * 66, -24], [d * 82, -32], [d * 92, -38]], 8, 11, 12 + d);
       // between the eyes and under them (the orbs: round their sockets instead, out to the temples)
-      if (!orbs) {
+      if (sty) { /* the drawn eyes fill this: nothing crosses or crowds them */ } else if (!orbs) {
         rope([[d * 8, 15], [d * 30, 13], [d * 60, 18], [d * 84, 8]], 7, 5, 3 + d);
         rope([[d * 6, 40], [d * 24, 40], [d * 48, 46], [d * 70, 40]], 6, 4, 13 + d);
       } else {
@@ -1275,8 +1833,16 @@ void main() {
     }
     rope([[0, -8], [0, -40], [0, -68]], 7, 13, 9);
     // a heavy wet upper lid over every eye (a closed eye keeps its crease); orbs: a wet socket rim, heavy at the top
-    const all = (orbs ? ORBS : EYES).map((E, i) => [E, F.eyes[i].k * F.eyes[i].a]);
-    if (F.extra) all.push([F.extra.e, Math.pow(Math.sin(Math.PI * clamp((t - F.extra.t0) / F.extra.dur, 0, 1)), 0.4)]);
+    const all = (sty ? sty.eyes : orbs ? ORBS : EYES).map((E, i) => [E, F.eyes[i].k * F.eyes[i].a, i]);
+    if (sty) {
+      // drawn eyes: the brows are liquid, heavy over the nose, thinning out and up into a spire's root (they narrow,
+      // flare and twitch with the eye; the cut below gives them their hard edge)
+      for (const [, , i] of all) {
+        const { R: R0 } = eyeGeo(S, i, Math.max(0.3, F.eyes[i].k), F.eyes[i]), n = R0.length;
+        pen.rope(R0, R0.map((_, j) => Math.max(1.5, (j < n - 2 ? lerp(17, 9, j / (n - 3)) : 11) * u * A)), { t, seed: 20 + i * 3.1, speed: 7, wave: 40 });
+      }
+    }
+    if (F.extra && !sty) all.push([F.extra.e, Math.pow(Math.sin(Math.PI * clamp((t - F.extra.t0) / F.extra.dur, 0, 1)), 0.4)]);
     if (orbs) {
       for (const [E, k] of all) {
         const [cx, cy] = at(E[0], E[1]), r = (E[2] + 2.4) * u, n = 22, Q = [], W = [];
@@ -1289,7 +1855,7 @@ void main() {
         if (k > 0.02) pen.glow(cx, cy, r * 1.9, 0.07 * Math.min(1, k));
       }
     }
-    for (const [E, k] of orbs ? [] : all) {
+    for (const [E, k] of orbs || sty ? [] : all) {
       const R0 = eyePts(S, E, Math.max(0.3, k), 2.6, 10, droopOf(E)).slice(0, 11);
       pen.rope(R0, R0.map((_, i) => Math.max(1.2, 5.5 * u * A * (0.35 + 0.65 * Math.sin(Math.PI * i / 10)))), { t, seed: E[0], speed: 7, wave: 40 });
     }
@@ -1300,7 +1866,8 @@ void main() {
       drip(pen, px, py, dl * k, fail ? per * 0.7 : per, ph, t, { w: 6 * u / L.U, r: u / L.U, fall: fail ? 1.4 : 1 });
     }
     // no liquid where an eye is open (an orb's socket is always open: its membrane is drawn sharp), nor inside the maw
-    for (const [E, k] of all) {
+    for (const [E, k, i] of all) {
+      if (sty) { if (k > 0.08) pen.cut(eyeGeo(S, i, k, F.eyes[i]).W); continue; }
       if (orbs) { const [cx, cy] = at(E[0], E[1]), r = (E[2] + 0.6) * u, Q = []; for (let i = 0; i < 12; i += 1) Q.push([cx + Math.cos(i / 12 * TAU) * r, cy + Math.sin(i / 12 * TAU) * r]); pen.cut(Q); }
       else if (k > 0.08) pen.cut(eyePts(S, E, k, 1.2, 10, droopOf(E)));
     }
@@ -1392,7 +1959,24 @@ void main() {
     if (m > 0.015) drawMaw(g, S, t, m);
     // the eyes
     const rec = MIC.state === "recording", working = V.view === "working";
-    const orbs = orbsOn();
+    const sty = styleOf(), orbs = !sty && orbsOn();
+    if (sty) {
+      sty.eyes.forEach((E, i) => {
+        const e = F.eyes[i], k = e.k * e.a;
+        if (k < 0.05) return;
+        const w = leanW(E[1]), cx = S.x + E[0] * u + S.lx * w, cy = S.y + E[1] * u + S.ly * w, Lp = E[2] * u;
+        if (!R.desk && R.text.some((q) => q.x < cx + Lp && q.x + q.w > cx - Lp && q.y + d < cy + Lp * 0.4 && q.y + d + q.h > cy - Lp * 0.4)) return;
+        const glow = (rec ? 1.25 + 0.7 * V.lvl : working ? 0.55 : 1) * Math.min(1, k);
+        styleEye(g, S, i, k, e, glow, t);
+      });
+      g.restore();
+      if (wipe) {
+        g.globalCompositeOperation = "destination-out"; g.fillStyle = "#000";
+        for (const r of R.desk ? R.keep : R.text) g.fillRect(r.x - 6, r.y + d - 6, r.w + 12, r.h + 12);
+        g.globalCompositeOperation = "source-over";
+      }
+      return;
+    }
     const list = (orbs ? ORBS : EYES).map((E, i) => [E, F.eyes[i].k * F.eyes[i].a, F.eyes[i]]);
     if (F.extra) list.push([F.extra.e, Math.pow(Math.sin(Math.PI * clamp((t - F.extra.t0) / F.extra.dur, 0, 1)), 0.4), F.eyes[2]]);
     if (orbs) {
@@ -1618,15 +2202,24 @@ void main() {
     if (!V.over) { V.over = nowMs; return; }
     if (nowMs - V.over > 2000) { V.pre = avg; V.stepAt = nowMs; V.q += 1; V.guard = "stepped"; V.over = 0; V.stats.ms.length = 0; sizeLayer(); }
   }
+  // 0.3.0: between two of its frames the engine asks the browser for no frame at all (a timer wakes it just before the
+  // next one is due). Before, it asked at every display refresh and skipped: on a 144 or 240 Hz screen that made the page
+  // run 5 to 8 empty main frames per drawn one, and every running CSS animation on the page (the dip's) was serviced at each.
+  function later(ms) {
+    if (ms > 8) V.tm = setTimeout(() => { V.tm = 0; V.raf = requestAnimationFrame(loop); }, ms - 6);
+    else V.raf = requestAnimationFrame(loop);
+  }
+  function stopLoop() { cancelAnimationFrame(V.raf); clearTimeout(V.tm); V.raf = 0; V.tm = 0; }
   function loop(nowMs) {
     V.raf = 0;
     const want = wanted();
     if (!want) return;
-    V.raf = requestAnimationFrame(loop);
     const cheap = want === 2, lean = V.mode === "cheap";
     if (cheap !== L.cheap) { L.cheap = cheap; sizeLayer(); }
     L.lean = lean;
-    if (nowMs - V.last < (cheap ? CHEAP_MS : FRAME_MS) - 2) return;
+    const gap = (cheap ? CHEAP_MS : FRAME_MS) - 2;
+    if (nowMs - V.last < gap) { later(gap - (nowMs - V.last)); return; }
+    later(gap);
     const dt = Math.min(0.1, (nowMs - (V.last || nowMs)) / 1000);
     if (V.last) { V.stats.gaps.push(nowMs - V.last); if (V.stats.gaps.length > 600) V.stats.gaps.shift(); }
     V.last = nowMs; V.stats.frames += 1;
@@ -1635,7 +2228,7 @@ void main() {
     V.stats.ms.push(performance.now() - a); if (V.stats.ms.length > 600) V.stats.ms.shift();
     guard(nowMs);
   }
-  function kick() { if (!V.raf) { V.last = 0; V.raf = requestAnimationFrame(loop); } }
+  function kick() { if (!V.raf && !V.tm) { V.last = 0; V.raf = requestAnimationFrame(loop); } }
   /** One frame now: reduced motion (the full look, still), a layout change, a tab coming back. */
   function draw() {
     if (!V.on || !L.cv) return;
@@ -1681,7 +2274,7 @@ void main() {
   const ctl = {
     /** The scene: idle | listening | working | calm. */
     state(s) {
-      if (!STATES.includes(s)) throw new TypeError("VenomKit state must be one of " + STATES.join(", "));
+      if (!STATES.includes(s)) throw new TypeError("InkKit state must be one of " + STATES.join(", "));
       const was = V.state;
       V.state = s;
       V.view = s === "working" ? "working" : s === "calm" ? "result" : "start";
@@ -1693,9 +2286,9 @@ void main() {
     },
     /** The cost level: full (as designed) | cheap (12 fps, a notch smaller, no glints or hair) | still (one frame, then stop). */
     setMode(m) {
-      if (!MODES.includes(m)) throw new TypeError("VenomKit mode must be one of " + MODES.join(", "));
+      if (!MODES.includes(m)) throw new TypeError("InkKit mode must be one of " + MODES.join(", "));
       V.mode = m; L.lean = m === "cheap"; V.dirty = true;
-      if (V.on) { cancelAnimationFrame(V.raf); V.raf = 0; if (m !== "still") L.cheap = m === "cheap" || V.view === "working"; sizeLayer(); draw(); }
+      if (V.on) { stopLoop(); if (m !== "still") L.cheap = m === "cheap" || V.view === "working"; sizeLayer(); draw(); }
       return m;
     },
     /** Hide the canvases and stop every frame, timer and listener (false), or bring it back in the last mode (true). */
@@ -1703,7 +2296,7 @@ void main() {
       flag = flag !== false;
       if (V.dead || flag === V.on) return flag;
       if (!flag) {
-        V.on = false; cancelAnimationFrame(V.raf); V.raf = 0; unlisten();
+        V.on = false; stopLoop(); unlisten();
         L.layer.style.display = "none"; if (F.film) F.film.style.display = "none";
         return false;
       }
@@ -1794,15 +2387,15 @@ void main() {
 
 const api = {
   version: VERSION, roles: ROLES, states: STATES, modes: MODES,
-  /** VenomKit.mount(host?, options?) -> controller */
+  /** InkKit.mount(host?, options?) -> controller */
   mount(host, options) {
-    if (typeof document === "undefined") throw new Error("VenomKit.mount needs a browser document");
+    if (typeof document === "undefined") throw new Error("InkKit.mount needs a browser document");
     if (host && !host.nodeType) { options = host; host = null; }
     return createEngine(host || document.body, options);
   },
 };
 const root = typeof globalThis !== "undefined" ? globalThis : typeof self !== "undefined" ? self : this;
 if (typeof module === "object" && module && module.exports) module.exports = api;
-if (root) root.VenomKit = api;
+if (root) root.InkKit = api;
 
 })();

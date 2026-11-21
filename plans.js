@@ -222,6 +222,7 @@ export function createPlans(d) {
   const focusFoot = (f) => (!f.more ? "" : f.morePlans.length === 1
     ? `<button type="button" class="focus-more" data-act="pln-needs" data-plan="${esc(f.morePlans[0])}">${f.more} more need you${g("chevron-right")}</button>`
     : `<a class="focus-more" href="${R.href(R.LIBRARY)}">${f.more} more across your plans${g("chevron-right")}</a>`);
+  let footHtml = "";   // the footer as last generated: the kit decorates the live one in Ink, so it is never compared with it
   function homeFocus() {
     if (backup || !P.data) return "";
     const f = R.focusItems(entries(), P.data.focus || {}, Date.now());
@@ -234,7 +235,7 @@ export function createPlans(d) {
         aria-label="${esc(tickLabel(it))}">${TICK}</button>${open}</li>`;
     }).join("");
     return `<section class="home-card focus" aria-labelledby="focus-h"><div class="home-card-head"><h2 id="focus-h">Today's focus</h2>${focusBadge(f)}</div>
-      <ul class="focus-list">${rows}</ul>${focusFoot(f)}</section>`;
+      <ul class="focus-list">${rows}</ul>${(footHtml = focusFoot(f))}</section>`;
   }
   // After a tick (here or on his other device): the same rows change in place, so focus and an open panel stay put;
   // a different list (a new day, a changed plan) redraws the card and keeps focus on the same control.
@@ -253,7 +254,7 @@ export function createPlans(d) {
       });
       $(".focus-count", card).outerHTML = focusBadge(f);
       const foot = $(".focus-more", card), next = focusFoot(f);
-      if (foot && foot.outerHTML !== next) foot.outerHTML = next || "";
+      if (foot && footHtml !== next) { footHtml = next; foot.outerHTML = next || ""; }
       return;
     }
     const controls = () => $$("button, a", $(".home-card.focus") || document.createElement("i"));
@@ -572,7 +573,7 @@ export function createPlans(d) {
       const label = `<span class="pln-ck-text" dir="auto">${esc(r.text)}</span>${sub}`;
       const text = s.kind === "layer" ? `<button type="button" class="pln-ck-t" data-act="pln-open-row" data-key="${r.key}">${label}</button>` : `<span class="pln-ck-t">${label}</span>`;
       const more = can ? `<button type="button" class="icon-btn pln-ck-more" data-act="pln-rowmenu" data-key="${r.key}" aria-haspopup="menu" aria-label="${esc(t("moreFor", { what: r.text }))}">${g("more")}</button>` : "";
-      const acts = can ? `<div class="pln-ck-acts"><button type="button" class="pln-ck-act" data-act="pln-redit" data-key="${r.key}" tabindex="-1">${g("pencil")}<span>${esc(t("editIt"))}</span></button><button type="button" class="pln-ck-act del" data-act="pln-rdel" data-key="${r.key}" tabindex="-1">${g("trash")}<span>${esc(t("deleteIt"))}</span></button></div>` : "";
+      const acts = can ? `<div class="pln-ck-acts" data-vk-dip="none"><button type="button" class="pln-ck-act" data-act="pln-redit" data-key="${r.key}" tabindex="-1">${g("pencil")}<span>${esc(t("editIt"))}</span></button><button type="button" class="pln-ck-act del" data-act="pln-rdel" data-key="${r.key}" tabindex="-1">${g("trash")}<span>${esc(t("deleteIt"))}</span></button></div>` : "";
       return `<li class="pln-ck" data-state="${state}" data-key="${r.key}">${acts}<div class="pln-ck-row">${box}${text}${more}</div></li>`;
     }).join("");
     const empty = rows.length ? "" : `<p class="pln-ck-empty"><b>${esc(t("noReqs"))}</b>${can ? `<span>${esc(t(s.kind === "layer" ? "noPartsHint" : "noReqsHint"))}</span>` : ""}</p>`;

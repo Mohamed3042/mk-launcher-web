@@ -341,10 +341,11 @@ function mainCard(app) {
   const color = app.color ? esc(app.color) : "var(--main-app-c)";
   const st = stateOf(app);
   const badge = st === "none" || st === "unknown" ? "" : `<span class="badge ${st}"></span>`;
+  // the app's name is a button with its words to the very edge, between two lines of words: no oil (Ink dip)
   return `<div class="main-app" style="--c:${color}">
     <span class="aicon lg" style="--c:${color};--app:${color}">${g(app.icon || "grid")}${badge}</span>
     <div class="what"><span class="eyebrow">My main app</span>
-      <button type="button" class="name" data-act="app-detail" data-id="${esc(app.id)}" aria-label="${esc(app.name)}, details"><span dir="auto">${esc(app.name)}</span>${g("chevron-right")}</button>
+      <button type="button" class="name" data-vk-dip="none" data-act="app-detail" data-id="${esc(app.id)}" aria-label="${esc(app.name)}, details"><span dir="auto">${esc(app.name)}</span>${g("chevron-right")}</button>
       <div class="state">${statusEl(app, true)}${opened ? `<span class="opened">opened ${esc(ago(opened.at))}</span>` : ""}</div></div>
     ${startButton(app, false) || openLink(app, "btn primary", `Open${g("arrow-right")}`)}</div>`;
 }

@@ -1,7 +1,7 @@
 // Offline shell: the launcher still opens (with the last known state) when the PC is asleep.
 // Paths are relative to this file, so the same worker runs on the PC (/) and on GitHub Pages (/mk-launcher-web/).
 // It caches only the public shell: never the API, never GitHub, never a request that carries a key.
-const SHELL = "mkl-shell-v17";
+const SHELL = "mkl-shell-v18";
 const SHOTS = "mkl-shots-v1";
 const OURS = ["mkl-shell-", "mkl-shots-"]; // other apps on the same origin (MK Cinema on Pages) keep their caches
 const FILES = [
@@ -9,7 +9,7 @@ const FILES = [
   "./reels.js", "./reels.css", "./reels-prefs.js", "./cinema.js", "./cinema.css", "./cinema-rules.js", "./plans.js", "./plans.css", "./plans-rules.js", "./waiting.js", "./waiting.css", "./waiting-rules.js", "./waiting-ink.js", "./waiting-marks.js", "./connect.js", "./home-rules.js", "./changes-rules.js","./settings.js", "./source.js", "./backup-rules.js", "./host.js", "./host-rules.js",
   // the Ink look: the shared kit (only the files the page runs) and the launcher's own rules for it
   "./skin-boot.js", "./skin-rules.js", "./skin-ink.js", "./skin-ink.css",
-  "./ink-kit/tokens.css", "./ink-kit/components.css", "./ink-kit/venom-liquid.js",
+  "./ink-kit/tokens.css", "./ink-kit/components.css", "./ink-kit/ink-liquid.js", "./ink-kit/dip.css", "./ink-kit/dip.js",
   "./fonts/dm-sans-latin-400-normal.woff2", "./fonts/dm-sans-latin-600-normal.woff2",
   "./fonts/cormorant-garamond-latin-500-normal.woff2", "./fonts/caveat-latin-600-normal.woff2",
   "./fonts/im-fell-english-sc-latin-400-normal.woff2", "./icons/icon.svg", "./icons/backup.svg",

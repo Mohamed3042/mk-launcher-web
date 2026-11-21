@@ -61,3 +61,23 @@ export function creatureFor({ route, w, h, phone, hero = null, sheet = null }) {
   if (phone || free < MARGIN_MIN) return { show: false };
   return { show: true, x: sheet.right + free / 2, y: Math.min(220, h * 0.16), scale: Math.min(0.9, Math.max(0.55, free / 620)) };
 }
+
+// The dip (kit 0.3.3): every control wears living black oil. It moves at rest while he is around (more than the
+// kit's default: he asked for everything alive) and holds still, still drawn, when nothing was touched for as long as
+// Home's liquid takes to go still: the launcher is open all day. Reduced motion and a hidden tab are the kit's own.
+export const DIP_FLOWS = 9;               // rims moving at once (kit default 3, the Lab 6; measured at 4k: +0.5 ms a frame over 6)
+export const DIP_DROPS = 3;               // drips at once (kit default 1, the Lab 2)
+/** Kit 0.3.3: the travelling light stays on on a PC; a touch-first device gets the 0.3.2 look (light: 0) until it has been seen on a real phone. */
+export const dipLight = (touchFirst) => (touchFirst ? 0 : 1);
+export const DIP_REST_MS = HOME_CHEAP_MS; // then "cheap": the oil is drawn, press and hover still squeeze it
+
+/** The dip's mode for this moment: "on" | "cheap". */
+export function dipModeFor({ idleMs = 0 }) {
+  return idleMs < DIP_REST_MS ? "on" : "cheap";
+}
+
+/** When the dip's mode will change next on its own (ms from now); null = never. */
+export function dipNextChangeIn({ idleMs = 0, hidden = false }) {
+  if (hidden) return null;
+  return idleMs < DIP_REST_MS ? DIP_REST_MS - idleMs : null;
+}

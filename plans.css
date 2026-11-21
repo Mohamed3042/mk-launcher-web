@@ -598,7 +598,7 @@ button.pln-change:hover { border-color: var(--line-strong); }
   border: 1px dashed var(--line-strong); background: transparent; color: var(--ink-2); font: inherit;
 }
 .pln-rc-new > svg.g { color: var(--accent); }
-.pln-rc-new span { display: flex; flex-direction: column; }
+.pln-rc-new span:not(:where(.vk-dip)) { display: flex; flex-direction: column; }
 .pln-rc-new b { font-size: 14.5px; font-weight: 600; color: var(--ink); }
 .pln-rc-new small { font-size: 12.5px; color: var(--ink-3); }
 .pln-rc-new:hover { border-color: var(--accent); }
@@ -1063,7 +1063,7 @@ html.pln-maproom[data-theme="dark"] { --glow: var(--pln-map-glow) !important; }
   border-radius: 999px; border: 1px solid var(--line); background: var(--raised); color: var(--ink-2); font: 600 13.5px var(--font); cursor: pointer;
 }
 [dir="rtl"] .pln-req-up { padding: 0 7px 0 13px; }
-.pln-req-up span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pln-req-up span:not(:where(.vk-dip)) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pln-req-up:hover { color: var(--ink); border-color: var(--line-strong); }
 .pln-req-up svg.g { width: 16px; height: 16px; flex: none; }
 .pln-ph .main .pln-req-up { margin: 0 0 8px; }

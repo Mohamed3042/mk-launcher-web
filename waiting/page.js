@@ -6,6 +6,7 @@ import * as source from "../source.js";
 import { createWaiting } from "../waiting.js";
 import { GLYPHS } from "../glyphs.js";
 import { connectHtml, saveKey, cinemaKeyWorks } from "../connect.js";
+import { dipOnly } from "../skin-ink.js";
 
 const BACKUP = source.BACKUP;
 const $ = (s, el = document) => el.querySelector(s);
@@ -102,4 +103,5 @@ async function boot() {
   }
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("../sw.js").catch(() => {});
 }
+dipOnly(); // the Ink look: no liquid on this page, but every control wears the oil
 boot();

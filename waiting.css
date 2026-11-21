@@ -179,6 +179,7 @@ html.wt-page .wt-date { padding-inline-end: 96px; }
 }
 .home-waiting .g { width: 17px; height: 17px; }
 .home-waiting .g:last-child { width: 15px; height: 15px; opacity: .6; }
+.home-waiting .g:has(+ .vk-dip:last-child) { width: 15px; height: 15px; opacity: .6; }   /* the same chevron when the Ink dip's layer follows it */
 .home-waiting:hover span { text-decoration: underline; text-underline-offset: 3px; }
 /* a phone: the quiet count sits under the date instead of wrapping beside it */
 @media (max-width: 520px) {

@@ -1,0 +1,154 @@
+/* The shared ink kit (see VERSION). */
+
+:where(.vk-dip-pos) { position: relative; }   /* zero specificity: an app rule that later sets position: absolute / fixed on the host wins */
+
+/* the oil layer: a box larger than its host by --vk-dip-pad on every side; it never takes space and never takes a click.
+   Its parts are stacked in one grid cell, not positioned: every positioned element is one more box the browser walks at
+   every pointer move (hit testing), and a page has 100+ of these layers. */
+.vk-dip {
+  position: absolute; z-index: auto;
+  inset: calc(-1 * var(--vk-dip-ct, var(--vk-dip-pad, 20px))) calc(-1 * var(--vk-dip-cr, var(--vk-dip-pad, 20px))) calc(-1 * var(--vk-dip-cb, var(--vk-dip-pad, 20px))) calc(-1 * var(--vk-dip-cl, var(--vk-dip-pad, 20px))); display: grid;
+  pointer-events: none; user-select: none; contain: layout style;
+  opacity: 0; transform-origin: 50% calc(100% - var(--vk-dip-cb, var(--vk-dip-pad, 20px)));   /* the host's bottom edge: hover, press and the spring grow up and sideways, never down onto words below */
+  transition: opacity 700ms cubic-bezier(.62, 0, .18, 1), transform 380ms cubic-bezier(.62, 0, .18, 1);
+}
+.vk-dip[hidden] { display: none; }
+/* while dip.js measures (one synchronous read): the layer folds into its host's box so its overhang is not counted as page size; it is
+   not hidden, so running animations go on (display: none would start them again) */
+.vk-dip.vk-dip-measure { inset: 0 !important; overflow: clip !important; }   /* its own scale (near, hover, spring: a few px) still counts: a cut that is a little too careful */
+.vk-dip.vk-dip--sib.vk-dip-measure { inset: auto !important; width: 0 !important; height: 0 !important; }
+.vk-dip[data-ready] { opacity: 1; }
+.vk-dip.vk-dip--sib { inset: auto; }
+/* a layer next to the end of the page or of a scroll box is cut back on that side (dip.js sets --vk-dip-ct/cr/cb/cl and the
+   picture's size and offset): it never adds to the scrollable overflow, so dipping never makes a scrollbar or more scroll
+   height. Cut layers clip their parts and do not scale. */
+.vk-dip[data-clamp] { overflow: clip; transform: none !important; }
+.vk-dip[data-clamp] > .vk-dip-a, .vk-dip[data-clamp] > .vk-dip-b { background-size: var(--vk-dip-bw) calc(3 * var(--vk-dip-bh)); background-position: var(--vk-dip-bx) calc(var(--vk-dip-by) - var(--vk-dip-f) * var(--vk-dip-bh)); }
+.vk-dip[data-clamp] > .vk-dip-run { -webkit-mask-size: var(--vk-dip-bw) calc(3 * var(--vk-dip-bh)); mask-size: var(--vk-dip-bw) calc(3 * var(--vk-dip-bh)); -webkit-mask-position: var(--vk-dip-bx) var(--vk-dip-by); mask-position: var(--vk-dip-bx) var(--vk-dip-by); }   /* laid over a void element (input, hr): dip.js sets left, top, width, height */
+.vk-dip > * { grid-area: 1 / 1; min-inline-size: 0; min-block-size: 0; pointer-events: none; }
+.vk-dip > i { display: block; }
+/* the picture holds three frames of the oil, top to bottom; --vk-dip-f (0, 1, 2) is the frame a part shows (dip.js walks it) */
+.vk-dip > .vk-dip-a, .vk-dip > .vk-dip-b { --vk-dip-f: 0; background-size: 100% 300%; background-repeat: no-repeat; background-position: 0 calc(var(--vk-dip-f) * 50%); }
+.vk-dip > .vk-dip-b { --vk-dip-f: 1; opacity: 0; transform-origin: 50% 0; }
+
+/* ---- rest: alive and slow, on every control at once (0.3.2 "alive 3": one oil skin, not beads). In ONE fixed overlay dip.js lays
+   (1) two SKINS per live control: frames B and C of its own rim picture, each in one of 4 skin groups whose opacity fades in and out, so
+   the rim itself crawls (beads creep, the pool sags, the streak slides) even where nothing else moves; (2) 2 to 4 TONGUES per control,
+   gathered low (gravity), each over a still fillet that joins it to the rim, in 8 shared groups that slide them out and pull them back.
+   A group is ONE element with ONE endless animation, so the cost is 12 animations on any page. The overlay never takes a click, never
+   adds scroll size (fixed, clipped), and steps aside while the page scrolls.
+   The group lines below are written by dip.js's lobeKeyframes() (a test checks they match). */
+.vk-dip-lobes { position: fixed; inset: 0; z-index: 29; pointer-events: none; overflow: clip; contain: strict; transition: opacity 260ms ease-out; }
+.vk-dip-lobes[hidden] { display: none; }
+.vk-dip-lobes.vk-dip-lobes--away { opacity: 0; transition: none; }
+.vk-dip-lobes > div { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.vk-dip-lobes i { position: absolute; display: block; background-size: 100% 100%; background-repeat: no-repeat; }
+.vk-dip-lobes > .vk-dip-s { opacity: 0; }
+.vk-dip-lobes i.vk-dip-skin { background-size: 100% 300%; background-position: 0 100%; }   /* frame C of the host's rim picture */
+.vk-dip-lobes i.vk-dip-skin--b { background-position: 0 50%; }   /* and frame B, on another skin group */
+html[data-vk-dip="on"] .vk-dip-lobes > .vk-dip-s { animation: var(--vk-dip-gn) var(--vk-dip-gt, 4s) cubic-bezier(.45, .05, .55, .95) var(--vk-dip-gd, 0s) infinite both; }
+html[data-vk-dip="on"] .vk-dip-lobes > .vk-dip-g { animation: var(--vk-dip-gn) var(--vk-dip-gt, 3s) cubic-bezier(.45, .05, .55, .95) var(--vk-dip-gd, 0s) infinite both; }
+.vk-dip-g0 { --vk-dip-gn: vk-dip-g0; --vk-dip-gt: 2.60s; --vk-dip-gd: 0.00s; }
+@keyframes vk-dip-g0 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(0px, 7.2px, 0); } 68% { transform: translate3d(0px, 10px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g1 { --vk-dip-gn: vk-dip-g1; --vk-dip-gt: 3.59s; --vk-dip-gd: -1.79s; }
+@keyframes vk-dip-g1 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(0px, 7.2px, 0); } 68% { transform: translate3d(0px, 10px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g2 { --vk-dip-gn: vk-dip-g2; --vk-dip-gt: 2.98s; --vk-dip-gd: -0.80s; }
+@keyframes vk-dip-g2 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(4.13px, 5.9px, 0); } 68% { transform: translate3d(5.16px, 8.37px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g3 { --vk-dip-gn: vk-dip-g3; --vk-dip-gt: 3.97s; --vk-dip-gd: -2.90s; }
+@keyframes vk-dip-g3 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(-4.13px, 5.9px, 0); } 68% { transform: translate3d(-5.16px, 8.37px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g4 { --vk-dip-gn: vk-dip-g4; --vk-dip-gt: 3.36s; --vk-dip-gd: -0.50s; }
+@keyframes vk-dip-g4 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(7.2px, 0px, 0); } 68% { transform: translate3d(9px, 1px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g5 { --vk-dip-gn: vk-dip-g5; --vk-dip-gt: 2.74s; --vk-dip-gd: -1.70s; }
+@keyframes vk-dip-g5 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(-7.2px, 0px, 0); } 68% { transform: translate3d(-9px, 1px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g6 { --vk-dip-gn: vk-dip-g6; --vk-dip-gt: 3.73s; --vk-dip-gd: -3.28s; }
+@keyframes vk-dip-g6 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(7.2px, 0px, 0); } 68% { transform: translate3d(9px, 1px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+.vk-dip-g7 { --vk-dip-gn: vk-dip-g7; --vk-dip-gt: 3.12s; --vk-dip-gd: -1.25s; }
+@keyframes vk-dip-g7 { 0%, 4% { transform: translate3d(0, 0, 0); } 52% { transform: translate3d(-7.2px, 0px, 0); } 68% { transform: translate3d(-9px, 1px, 0); } 100% { transform: translate3d(0, 0, 0); } }
+/* ---- the light (0.3.3 "light"): a lamp sways over the oil. Every live control has 8 light pictures of its own oil (the lamp at 8
+   places along its outline: only the slopes facing the lamp shine, so ridges, beads, the pool's lip and a hanging drip light up as it
+   passes). The 8 light groups cross-fade them in a chain (two neighbours always add up to one streak), so the wet streak travels; the
+   host's hash picks where it starts and which way it runs. Linear here: the easing is in the lamp's path (dip.js lightPath). */
+.vk-dip-lobes > .vk-dip-l { opacity: 0; mix-blend-mode: plus-lighter; }   /* two neighbours at half add up to one full streak: the light never dims mid-step */
+.vk-dip-lobes i.vk-dip-lt { background-size: 100% 800%; }
+html[data-vk-dip="on"] .vk-dip-lobes > .vk-dip-l { animation: vk-dip-l 4.4s linear var(--vk-dip-gd, 0s) infinite both; }
+@keyframes vk-dip-l { 0% { opacity: 0; } 6.25% { opacity: .5; } 12.5% { opacity: 1; } 18.75% { opacity: .5; } 25%, 100% { opacity: 0; } }
+.vk-dip-l0 { --vk-dip-gd: 0.00s; }
+.vk-dip-l1 { --vk-dip-gd: -0.55s; }
+.vk-dip-l2 { --vk-dip-gd: -1.10s; }
+.vk-dip-l3 { --vk-dip-gd: -1.65s; }
+.vk-dip-l4 { --vk-dip-gd: -2.20s; }
+.vk-dip-l5 { --vk-dip-gd: -2.75s; }
+.vk-dip-l6 { --vk-dip-gd: -3.30s; }
+.vk-dip-l7 { --vk-dip-gd: -3.85s; }
+
+/* ---- a drip swells, stretches, lets go and grows again (a one-shot that dip.js starts on a few controls at a time) */
+/* ---- a drip swells, stretches, lets go and grows again (a one-shot that dip.js starts on a few controls at a time) */
+/* ---- a drip swells, stretches, lets go and grows again (a one-shot that dip.js starts on a few controls at a time) */
+/* ---- a drip swells, stretches, lets go and grows again (a one-shot that dip.js starts on a few controls at a time) */
+/* ---- a drip swells, stretches, lets go and grows again (a one-shot that dip.js starts on a few controls at a time) */
+/* ---- a drip swells, stretches, lets go and grows again (a one-shot that dip.js starts on a few controls at a time) */
+/* the drip: a neck hanging from the rim (still) and a bead that swells at its tip, lets go and falls a little, fading, then
+   grows again (never far: words below stay clean). One animated element per drip. */
+/* dip.js places it with margins from the layer's LEFT edge (picture coordinates: the picture is not mirrored), so the grid column is
+   physical too: justify-self: left, not start (start is the right edge in an RTL page) */
+.vk-dip-drip { display: grid; align-self: start; justify-self: left; inline-size: 6px; block-size: 18px; }
+.vk-dip-drip::before, .vk-dip-drip::after { content: ""; grid-area: 1 / 1; align-self: start; inline-size: 6px; }
+.vk-dip-drip::before { block-size: 9px; border-radius: 3px 3px 50% 50% / 3px 3px 70% 70%;
+  background: radial-gradient(60% 40% at 30% 30%, rgba(255, 255, 255, .55), transparent 70%), linear-gradient(90deg, #000, #0a0a0a 40%, #000); }
+.vk-dip-drip::after { block-size: 6px; margin-block-start: 6px; border-radius: 50% 50% 50% 50% / 44% 44% 56% 56%;
+  background: radial-gradient(circle at 34% 30%, #fff 0 10%, rgba(255, 255, 255, .3) 16%, #111 34%, #000 72%); box-shadow: 0 1px 2px rgba(0, 0, 0, .7); }
+html[data-vk-dip="on"] .vk-dip.vk-dip-drop:not([data-dry]) > .vk-dip-drip::after { animation: vk-dip-bead var(--vk-dip-dd, 5s) cubic-bezier(.5, 0, .5, 1) 1 both; }
+/* --vk-dip-fall: how far the bead may fall (21px; dip.js sets less when words are close under the control) */
+@keyframes vk-dip-bead { 0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; } 50% { transform: translate3d(0, calc(var(--vk-dip-fall, 21px) * .238095), 0) scale(1.55, 1.7); opacity: 1; }
+  60% { transform: translate3d(0, calc(var(--vk-dip-fall, 21px) * .428571), 0) scale(1.3, 1.95); opacity: 1; } 76% { transform: translate3d(0, var(--vk-dip-fall, 21px), 0) scale(1); opacity: 0; } 77%, 90% { transform: translate3d(0, 0, 0) scale(.3); opacity: 0; }
+  100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; } }
+
+/* ---- near: the oil leans out (dip.js draws the strand toward the pointer). lead 11: no scale here any more: a 1.2 % scale (about 1 px) that started a
+   transform transition on a different control at every step of a pointer sweep cost about 1.5 ms a frame; the hover look below is unchanged */
+/* ---- hover: thicker, wetter. Only the oil of a control (not a card, plate or panel: scaling a big box would pull its rim over the
+   words), and only where a pointer can hover (a tap does not leave it stuck). .vk-dip-hover forces the look (the demo's state row). */
+.vk-dip-host.vk-dip-hover > .vk-dip[data-kind="control"], .vk-dip-host.vk-dip-hover + .vk-dip--sib[data-kind="control"] { transform: scale(1.022); }
+.vk-dip-host.vk-dip-hover > .vk-dip[data-kind="control"] > .vk-dip-b, .vk-dip-host.vk-dip-hover + .vk-dip--sib[data-kind="control"] > .vk-dip-b { opacity: 1; transition: opacity 380ms; }
+@media (hover: hover) {
+  .vk-dip-host:hover > .vk-dip[data-kind="control"], .vk-dip-host:hover + .vk-dip--sib[data-kind="control"] { transform: scale(1.022); }
+  .vk-dip-host:hover > .vk-dip[data-kind="control"] > .vk-dip-b, .vk-dip-host:hover + .vk-dip--sib[data-kind="control"] > .vk-dip-b { opacity: 1; transition: opacity 380ms; }
+}
+/* ---- pressed: the oil clenches the control */
+.vk-dip-host:active > .vk-dip[data-kind="control"], .vk-dip-host:active + .vk-dip--sib[data-kind="control"], .vk-dip.vk-dip-press { transform: scale(.975); transition-duration: 120ms; }
+/* ---- released: it springs back past its rest and settles (the strands snap back in dip.js) */
+.vk-dip.vk-dip-release { animation: vk-dip-snap 900ms cubic-bezier(.3, 1.5, .5, 1); }
+/* the rim stays a little drawn in while the tongue is out and swells when its tip comes home (about 0.5 s after release) */
+@keyframes vk-dip-snap { 0% { transform: scale(.97); } 42% { transform: scale(.985); } 62% { transform: scale(1.055, 1.09); } 82% { transform: scale(.99); } 100% { transform: scale(1); } }
+
+/* ---- focus: a clear white ring OUTSIDE the oil (the host's own outline stays too) */
+.vk-dip > .vk-dip-ring { margin: calc(var(--vk-dip-ct, var(--vk-dip-pad, 20px)) - var(--vk-dip-reach, 11px) - 5px) calc(var(--vk-dip-cr, var(--vk-dip-pad, 20px)) - var(--vk-dip-reach, 11px) - 5px) calc(var(--vk-dip-cb, var(--vk-dip-pad, 20px)) - var(--vk-dip-reach, 11px) - 5px) calc(var(--vk-dip-cl, var(--vk-dip-pad, 20px)) - var(--vk-dip-reach, 11px) - 5px); border-radius: calc(var(--vk-dip-r, 24px) + var(--vk-dip-reach, 11px) + 5px);
+  box-shadow: 0 0 0 2px #fff, 0 0 14px 2px rgba(255, 255, 255, .45); opacity: 0; transition: opacity 160ms linear; }
+.vk-dip-host:focus-visible > .vk-dip > .vk-dip-ring, .vk-dip-host:focus-visible + .vk-dip--sib > .vk-dip-ring, .vk-dip-host.vk-dip-focus > .vk-dip > .vk-dip-ring, .vk-dip-host.vk-dip-focus + .vk-dip--sib > .vk-dip-ring { opacity: 1; }
+
+/* ---- disabled: dried and matte (dip.js paints a dry picture), no motion, no drips */
+.vk-dip[data-dry] > .vk-dip-b, .vk-dip[data-dry] > .vk-dip-drip { display: none; }
+.vk-dip[data-dry] { transform: none !important; animation: none !important; }   /* no scale, no snap on a dried control */
+
+/* ---- loading (aria-busy="true" or data-vk-loading on the host): a bright gloss runs round the oil */
+.vk-dip > .vk-dip-run { display: none; position: relative; overflow: hidden;
+  -webkit-mask-position: 0 0; mask-position: 0 0; -webkit-mask-size: 100% 300%; mask-size: 100% 300%; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; }   /* the image is set inline by dip.js */
+.vk-dip > .vk-dip-run::before { content: ""; position: absolute; inset-inline-start: 50%; inset-block-start: 50%; inline-size: var(--vk-dip-diag, 300px); block-size: var(--vk-dip-diag, 300px);
+  margin-inline-start: calc(var(--vk-dip-diag, 300px) / -2); margin-block-start: calc(var(--vk-dip-diag, 300px) / -2);
+  background: conic-gradient(from 0deg, transparent 0 62%, rgba(255, 255, 255, .25) 74%, #fff 82%, rgba(255, 255, 255, .2) 86%, transparent 90%); transform: rotate(30deg); }
+:is([aria-busy="true"], [data-vk-loading]).vk-dip-host > .vk-dip > .vk-dip-run, :is([aria-busy="true"], [data-vk-loading]).vk-dip-host + .vk-dip--sib > .vk-dip-run { display: block; }
+html[data-vk-dip="on"] .vk-dip.vk-dip-live > .vk-dip-run::before { animation: vk-dip-run 1.4s linear infinite; }
+@keyframes vk-dip-run { to { transform: rotate(390deg); } }
+
+/* ---- the strand overlay (one per window) */
+.vk-dip-overlay { position: fixed; inset-block-start: 0; left: 0; z-index: 30; pointer-events: none; }   /* physical: it is placed by page coordinates */
+
+/* ---- hidden tab: everything paused. Cheap: no rest motion at all (only the press, hover and release transitions) */
+html[data-vk-dip-hidden] .vk-dip-lobes > div, html[data-vk-dip-hidden] .vk-dip, html[data-vk-dip-hidden] .vk-dip *, html[data-vk-dip-hidden] .vk-dip *::before, html[data-vk-dip-hidden] .vk-dip *::after { animation-play-state: paused !important; }
+html[data-vk-dip="cheap"] .vk-dip.vk-dip-release { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .vk-dip, .vk-dip *, .vk-dip *::before, .vk-dip *::after { animation: none !important; transition-duration: 0ms !important; }
+  .vk-dip > .vk-dip-b { opacity: 0 !important; }
+  .vk-dip-lobes { display: none !important; }
+  .vk-dip-drip::after { margin-block-start: 8px; }
+}
